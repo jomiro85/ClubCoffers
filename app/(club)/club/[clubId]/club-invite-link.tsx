@@ -27,10 +27,11 @@ export function ClubInviteLink({
   }, [inviteUrl]);
 
   return (
-    <section className="flex max-w-2xl flex-col gap-3 rounded border border-neutral-300 p-4 dark:border-neutral-600">
+    <section className="flex max-w-2xl flex-col gap-3 rounded-lg border border-neutral-300 p-4 dark:border-neutral-600">
       <h2 className="text-lg font-medium">Invite members</h2>
       <p className="text-sm text-neutral-700 dark:text-neutral-300">
-        Share this link with your club members to join.
+        Anyone with this link can sign in and request to join. New joiners are{" "}
+        <strong className="font-medium">pending</strong> until an owner or admin approves them in Members.
       </p>
       <p className="break-all font-mono text-sm text-neutral-900 dark:text-neutral-100">
         <a href={inviteUrl} className="underline">

@@ -23,10 +23,10 @@ export function ClubDrawCycleCreateForm({
   );
 
   return (
-    <section className="flex flex-col gap-3">
+    <section id="create-cycle" className="flex flex-col gap-3 scroll-mt-8">
       <h2 className="text-lg font-medium">Create draw cycle</h2>
       <p className="text-sm text-neutral-600 dark:text-neutral-400">
-        No open cycle yet. Create the first one for this club.
+        A cycle is the fee period for one draw. Only one cycle can be <strong className="font-medium text-neutral-800 dark:text-neutral-200">open</strong> at a time. Set the period dates — members who join after the period starts won&apos;t be eligible for that draw.
       </p>
       <form
         action={formAction}

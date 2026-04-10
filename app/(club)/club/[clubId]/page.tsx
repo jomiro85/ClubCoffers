@@ -1,3 +1,7 @@
+import {
+  DrawCycleStatusBadge,
+  MembershipStatusBadge,
+} from "@/components/status-badges";
 import { getEligibleForDrawCycle } from "@/lib/clubs/draw-eligibility";
 import { createClient } from "@/lib/supabase/server";
 import { headers } from "next/headers";
@@ -8,10 +12,10 @@ import { ClubDrawCycleCreateForm } from "./club-draw-cycle-create-form";
 import { ClubDrawExecutionForms } from "./club-draw-execution-forms";
 import { ClubManualPaymentList } from "./club-manual-payment-list";
 import {
-  ClubReconciliation,
   type ReconciliationRow,
 } from "./club-reconciliation";
 import { ClubMembersTable } from "./club-members-table";
+import { ClubNextActions } from "./club-next-actions";
 
 type ClubPageProps = {
   params: Promise<{ clubId: string }>;
@@ -54,6 +58,17 @@ function buildReconciliationLabel(
   return "suspended_or_cancelled";
 }
 
+function formatPeriodDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  } catch {
+    return iso;
+  }
+}
+
 export default async function ClubPage({ params }: ClubPageProps) {
   const { clubId } = await params;
 
@@ -78,7 +93,7 @@ export default async function ClubPage({ params }: ClubPageProps) {
 
   const { data: viewerMembership } = await supabase
     .from("memberships")
-    .select("id, role")
+    .select("id, role, status")
     .eq("club_id", club.id)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -172,6 +187,29 @@ export default async function ClubPage({ params }: ClubPageProps) {
     status: m.status,
   }));
 
+  const pendingCount = members.filter((m) => m.status === "pending").length;
+  const suspendedCancelledCount = members.filter(
+    (m) => m.status === "suspended" || m.status === "cancelled"
+  ).length;
+
+  let winnerDisplayName: string | null = null;
+  if (
+    latestCycle &&
+    (latestCycle.status === "drawn" || latestCycle.status === "settled")
+  ) {
+    const { data: winEntry } = await supabase
+      .from("draw_entries")
+      .select("membership_id")
+      .eq("draw_cycle_id", latestCycle.id)
+      .eq("is_winner", true)
+      .maybeSingle();
+    if (winEntry?.membership_id) {
+      winnerDisplayName =
+        members.find((m) => m.membershipId === winEntry.membership_id)
+          ?.displayName ?? null;
+    }
+  }
+
   let succeededPayments: { membership_id: string; amount_pence: number }[] =
     [];
   if (openCycle) {
@@ -185,10 +223,6 @@ export default async function ClubPage({ params }: ClubPageProps) {
 
   const paidMembershipIds = new Set(
     succeededPayments.map((p) => p.membership_id)
-  );
-  const totalPotPence = succeededPayments.reduce(
-    (s, p) => s + p.amount_pence,
-    0
   );
 
   const reconciliationRows: ReconciliationRow[] = members.map((m) => {
@@ -218,15 +252,12 @@ export default async function ClubPage({ params }: ClubPageProps) {
 
   const activeMemberCount = members.filter((m) => m.status === "active").length;
 
-  let currentCycleLabel = "No cycles yet";
-  if (openCycle) {
-    currentCycleLabel = `${openCycle.name} (${openCycle.status})`;
-  } else if (latestCycle) {
-    currentCycleLabel = `No open cycle — latest: ${latestCycle.name} (${latestCycle.status})`;
-  }
-
-  const potLabel = openCycle ? `${latestTotalPotDisplay} pence` : "—";
-  const eligibleLabel = openCycle ? String(latestEligibleCount) : "—";
+  const summaryPotPence =
+    openCycle != null
+      ? latestTotalPotDisplay
+      : latestCycle != null
+        ? Number(latestCycle.total_pot_pence ?? 0)
+        : null;
 
   const closedSnapshotLen =
     latestCycle?.status === "closed" &&
@@ -245,17 +276,253 @@ export default async function ClubPage({ params }: ClubPageProps) {
     (host.startsWith("localhost") ? "http" : "https");
   const inviteUrl = `${proto}://${host}/join/${club.invite_token}`;
 
+  const viewerStatus = viewerMembership?.status ?? "";
+
+  const canCreateCycle = !openCycle && canManage;
+  const canCloseCycle = Boolean(
+    latestCycle?.status === "open" && canManage
+  );
+  const canRunDraw = Boolean(
+    latestCycle?.status === "closed" && canManage
+  );
+
   return (
-    <main className="flex flex-col gap-8">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">{club.name}</h1>
-        <dl className="grid max-w-md grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-          <dt className="text-neutral-500">Slug</dt>
-          <dd className="font-mono">{club.slug}</dd>
-          <dt className="text-neutral-500">Monthly fee</dt>
-          <dd>{club.monthly_fee_pence.toString()} pence</dd>
+    <main className="mx-auto flex max-w-4xl flex-col gap-8 pb-12">
+      {/* Summary */}
+      <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-700 dark:bg-neutral-950">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-neutral-900 dark:text-neutral-50">
+              {club.name}
+            </h1>
+            <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+              Slug <span className="font-mono text-neutral-700 dark:text-neutral-300">{club.slug}</span>
+              {" · "}
+              Fee{" "}
+              <span className="font-medium text-neutral-800 dark:text-neutral-200">
+                {club.monthly_fee_pence}p
+              </span>{" "}
+              / month
+            </p>
+          </div>
+          {latestCycle ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                Latest cycle
+              </span>
+              <DrawCycleStatusBadge status={latestCycle.status} />
+            </div>
+          ) : (
+            <span className="text-sm text-neutral-500 dark:text-neutral-400">
+              No cycles yet
+            </span>
+          )}
+        </div>
+        <dl className="mt-6 grid gap-4 border-t border-neutral-100 pt-6 sm:grid-cols-2 lg:grid-cols-4 dark:border-neutral-800">
+          <div>
+            <dt className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+              Active members
+            </dt>
+            <dd className="mt-1 text-2xl font-semibold tabular-nums text-neutral-900 dark:text-neutral-100">
+              {activeMemberCount}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+              Pending approval
+            </dt>
+            <dd className="mt-1 text-2xl font-semibold tabular-nums text-neutral-900 dark:text-neutral-100">
+              {pendingCount}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+              Suspended / cancelled
+            </dt>
+            <dd className="mt-1 text-2xl font-semibold tabular-nums text-neutral-900 dark:text-neutral-100">
+              {suspendedCancelledCount}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+              {openCycle ? "Current pot (open)" : "Pot (latest cycle)"}
+            </dt>
+            <dd className="mt-1 text-2xl font-semibold tabular-nums text-neutral-900 dark:text-neutral-100">
+              {summaryPotPence != null ? (
+                <>{summaryPotPence}p</>
+              ) : (
+                <span className="text-lg text-neutral-400">—</span>
+              )}
+            </dd>
+          </div>
         </dl>
-      </header>
+      </section>
+
+      {/* Your membership */}
+      <section className="rounded-xl border border-neutral-200 p-5 dark:border-neutral-700">
+        <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
+          Your membership
+        </h2>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-neutral-600 dark:text-neutral-400">Status</span>
+          <MembershipStatusBadge status={viewerStatus} />
+          <span className="text-neutral-400">·</span>
+          <span className="text-neutral-600 dark:text-neutral-400">Role</span>
+          <span className="font-mono text-xs">{viewerRole}</span>
+        </div>
+        {viewerStatus === "pending" ? (
+          <p className="mt-3 text-sm text-neutral-700 dark:text-neutral-300">
+            <strong className="font-medium">Pending</strong> means an owner or
+            admin still needs to approve you before you can pay or enter a draw.
+          </p>
+        ) : null}
+        {viewerStatus === "active" ? (
+          <p className="mt-3 text-sm text-neutral-700 dark:text-neutral-300">
+            When a cycle is open, your payment for that cycle is recorded below
+            for each member. Eligibility uses active status, payment, and join
+            date vs period start.
+          </p>
+        ) : null}
+        {(viewerStatus === "suspended" || viewerStatus === "cancelled") ? (
+          <p className="mt-3 text-sm text-neutral-700 dark:text-neutral-300">
+            You&apos;re not eligible for new draws in this state.
+          </p>
+        ) : null}
+      </section>
+
+      {/* Current cycle */}
+      <section
+        id="current-cycle"
+        className="rounded-xl border border-neutral-200 p-5 dark:border-neutral-700"
+      >
+        <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
+          Current cycle
+        </h2>
+        <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
+          The latest cycle drives fees and the draw. Only one cycle can be open
+          at a time.
+        </p>
+        {latestCycle ? (
+          <div className="mt-4 space-y-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <div>
+                <p className="text-lg font-medium text-neutral-900 dark:text-neutral-100">
+                  {latestCycle.name}
+                </p>
+                <p className="font-mono text-sm text-neutral-500 dark:text-neutral-400">
+                  Cycle #{latestCycle.cycle_number}
+                </p>
+              </div>
+              <DrawCycleStatusBadge status={latestCycle.status} />
+            </div>
+            <dl className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <dt className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                  Period start
+                </dt>
+                <dd className="mt-0.5 font-mono text-sm text-neutral-900 dark:text-neutral-100">
+                  {formatPeriodDate(latestCycle.period_start)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                  Period end
+                </dt>
+                <dd className="mt-0.5 font-mono text-sm text-neutral-900 dark:text-neutral-100">
+                  {formatPeriodDate(latestCycle.period_end)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                  Total pot
+                </dt>
+                <dd className="mt-0.5 text-lg font-semibold tabular-nums text-neutral-900 dark:text-neutral-100">
+                  {latestTotalPotDisplay}p
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                  Eligible entries
+                </dt>
+                <dd className="mt-0.5 text-lg font-semibold tabular-nums text-neutral-900 dark:text-neutral-100">
+                  {latestEligibleCount}
+                </dd>
+              </div>
+            </dl>
+            {(latestCycle.status === "drawn" ||
+              latestCycle.status === "settled") &&
+            winnerDisplayName ? (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50/90 px-4 py-3 dark:border-emerald-900/40 dark:bg-emerald-950/35">
+                <p className="text-xs font-medium uppercase tracking-wide text-emerald-800 dark:text-emerald-200">
+                  Result
+                </p>
+                <p className="mt-1 text-lg font-semibold text-emerald-950 dark:text-emerald-50">
+                  Winner: {winnerDisplayName}
+                </p>
+              </div>
+            ) : null}
+            {(latestCycle.status === "drawn" ||
+              latestCycle.status === "settled") &&
+            !winnerDisplayName ? (
+              <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                Draw completed — open cycle details for full results.
+              </p>
+            ) : null}
+            <Link
+              href={`/club/${club.id}/cycles/${latestCycle.id}`}
+              className="inline-flex text-sm font-medium text-neutral-900 underline underline-offset-2 hover:text-neutral-700 dark:text-neutral-100 dark:hover:text-neutral-300"
+            >
+              View full cycle details →
+            </Link>
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-neutral-600 dark:text-neutral-400">
+            No draw cycles yet.{" "}
+            {canManage
+              ? "Create a cycle below to start collecting fees for a period."
+              : "An owner or admin will create the first cycle."}
+          </p>
+        )}
+      </section>
+
+      {canManage ? (
+        <ClubNextActions
+          clubId={club.id}
+          latestCycleId={latestCycle?.id ?? null}
+          pendingCount={pendingCount}
+          hasOpenCycle={Boolean(openCycle)}
+          canCreateCycle={canCreateCycle}
+          canCloseCycle={canCloseCycle}
+          canRunDraw={canRunDraw}
+        />
+      ) : null}
+
+      {canCreateCycle ? (
+        <ClubDrawCycleCreateForm
+          clubId={club.id}
+          defaultCycleNumber={nextCycleNumber}
+        />
+      ) : null}
+
+      {canManage ? (
+        <ClubDrawExecutionForms
+          clubId={club.id}
+          closeCycleId={
+            latestCycle?.status === "open" ? latestCycle.id : null
+          }
+          runCycleId={
+            latestCycle?.status === "closed" ? latestCycle.id : null
+          }
+          closeEligibleCount={
+            latestCycle?.status === "open" ? latestEligibleCount : 0
+          }
+          closeTotalPotPence={
+            latestCycle?.status === "open" ? latestTotalPotDisplay : 0
+          }
+          runEntryCount={closedSnapshotLen}
+          runTotalPotPence={runPotClosed}
+        />
+      ) : null}
 
       <ClubInviteLink
         inviteUrl={inviteUrl}
@@ -263,68 +530,90 @@ export default async function ClubPage({ params }: ClubPageProps) {
         showToken={showSensitive}
       />
 
-      <section className="flex flex-col gap-3 rounded border border-neutral-300 p-4 dark:border-neutral-600">
-        <h2 className="text-lg font-medium">Overview</h2>
-        <dl className="grid max-w-xl grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-          <dt className="text-neutral-500">Current cycle</dt>
-          <dd>{currentCycleLabel}</dd>
-          <dt className="text-neutral-500">Pot (open cycle)</dt>
-          <dd className="font-mono">{potLabel}</dd>
-          <dt className="text-neutral-500">Eligible members (open cycle)</dt>
-          <dd className="font-mono">{eligibleLabel}</dd>
-          <dt className="text-neutral-500">Active members</dt>
-          <dd className="font-mono">{activeMemberCount}</dd>
-        </dl>
-      </section>
+      <ClubMembersTable
+        clubId={club.id}
+        viewerUserId={user.id}
+        viewerRole={viewerRole}
+        hasOpenCycle={Boolean(openCycle)}
+        paidMembershipIds={Array.from(paidMembershipIds)}
+        members={members.map((m) => ({
+          membershipId: m.membershipId,
+          userId: m.userId,
+          displayName: m.displayName,
+          role: m.role,
+          status: m.status,
+        }))}
+      />
 
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-medium">Draw cycles</h2>
+      {openCycle && canManage ? (
+        <section
+          id="mark-paid"
+          className="scroll-mt-8 rounded-xl border border-neutral-200 p-5 dark:border-neutral-700"
+        >
+          <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
+            Mark as paid
+          </h2>
+          <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
+            Record that an <strong className="font-medium text-neutral-800 dark:text-neutral-200">active</strong> member has paid the fee for the open cycle. Each member once per cycle.
+          </p>
+          <div className="mt-4">
+            <ClubManualPaymentList
+              clubId={club.id}
+              drawCycleId={openCycle.id}
+              rows={manualPaymentRows}
+            />
+          </div>
+        </section>
+      ) : null}
+
+      {/* All cycles */}
+      <section className="rounded-xl border border-neutral-200 p-5 dark:border-neutral-700">
+        <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
+          All cycles
+        </h2>
+        <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
+          History of every cycle. Open → closed → drawn. Follow a name for the
+          full audit trail.
+        </p>
         {allCycles.length > 0 ? (
-          <div className="overflow-x-auto border border-neutral-300 dark:border-neutral-600">
+          <div className="mt-4 overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-600">
             <table className="w-full min-w-[28rem] border-collapse text-left text-sm">
               <thead>
-                <tr className="border-b border-neutral-300 dark:border-neutral-600">
-                  <th className="p-2 font-medium">#</th>
-                  <th className="p-2 font-medium">Name</th>
-                  <th className="p-2 font-medium">Status</th>
-                  <th className="p-2 font-medium">Notes</th>
+                <tr className="border-b border-neutral-200 bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900/80">
+                  <th className="px-3 py-2.5 font-medium">#</th>
+                  <th className="px-3 py-2.5 font-medium">Name</th>
+                  <th className="px-3 py-2.5 font-medium">Status</th>
+                  <th className="px-3 py-2.5 font-medium"> </th>
                 </tr>
               </thead>
               <tbody>
                 {allCycles.map((c) => {
                   const isLatest = c.id === latestCycle?.id;
-                  const isOpen = c.status === "open";
                   return (
                     <tr
                       key={c.id}
                       className={
                         isLatest
-                          ? "border-b border-neutral-200 bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900/50"
-                          : "border-b border-neutral-200 dark:border-neutral-700"
+                          ? "border-b border-neutral-100 bg-neutral-50/80 dark:border-neutral-800 dark:bg-neutral-900/50"
+                          : "border-b border-neutral-100 dark:border-neutral-800"
                       }
                     >
-                      <td className="p-2 font-mono">{c.cycle_number}</td>
-                      <td className="p-2">
+                      <td className="px-3 py-2.5 font-mono text-neutral-600 dark:text-neutral-400">
+                        {c.cycle_number}
+                      </td>
+                      <td className="px-3 py-2.5">
                         <Link
                           href={`/club/${club.id}/cycles/${c.id}`}
-                          className="text-neutral-900 underline dark:text-neutral-100"
+                          className="font-medium text-neutral-900 underline underline-offset-2 dark:text-neutral-100"
                         >
                           {c.name}
                         </Link>
                       </td>
-                      <td className="p-2 font-mono">{c.status}</td>
-                      <td className="p-2 text-xs text-neutral-600 dark:text-neutral-400">
-                        {isLatest ? (
-                          <span className="mr-2 rounded bg-neutral-200 px-1.5 py-0.5 dark:bg-neutral-700">
-                            Latest
-                          </span>
-                        ) : null}
-                        {isOpen ? (
-                          <span className="rounded bg-neutral-200 px-1.5 py-0.5 dark:bg-neutral-700">
-                            Open
-                          </span>
-                        ) : null}
-                        {!isLatest && !isOpen ? "—" : null}
+                      <td className="px-3 py-2.5">
+                        <DrawCycleStatusBadge status={c.status} />
+                      </td>
+                      <td className="px-3 py-2.5 text-xs text-neutral-500 dark:text-neutral-400">
+                        {isLatest ? "Latest" : ""}
                       </td>
                     </tr>
                   );
@@ -333,97 +622,13 @@ export default async function ClubPage({ params }: ClubPageProps) {
             </table>
           </div>
         ) : (
-          <p className="text-sm text-neutral-600 dark:text-neutral-400">
-            No draw cycles yet.
+          <p className="mt-4 text-sm text-neutral-600 dark:text-neutral-400">
+            No cycles yet.
           </p>
         )}
-        {latestCycle ? (
-          <div className="flex flex-col gap-2 text-sm">
-            <p className="text-neutral-600 dark:text-neutral-400">
-              Latest cycle snapshot:{" "}
-              <span className="font-mono text-neutral-900 dark:text-neutral-100">
-                {latestTotalPotDisplay} pence
-              </span>{" "}
-              pot ·{" "}
-              <span className="font-mono text-neutral-900 dark:text-neutral-100">
-                {latestEligibleCount}
-              </span>{" "}
-              eligible entries.
-            </p>
-            <p>
-              <Link
-                href={`/club/${club.id}/cycles/${latestCycle.id}`}
-                className="text-neutral-900 underline dark:text-neutral-100"
-              >
-                View full details for {latestCycle.name}
-              </Link>
-            </p>
-          </div>
-        ) : null}
-        {canManage ? (
-          <ClubDrawExecutionForms
-            clubId={club.id}
-            closeCycleId={
-              latestCycle?.status === "open" ? latestCycle.id : null
-            }
-            runCycleId={
-              latestCycle?.status === "closed" ? latestCycle.id : null
-            }
-            closeEligibleCount={
-              latestCycle?.status === "open" ? latestEligibleCount : 0
-            }
-            closeTotalPotPence={
-              latestCycle?.status === "open" ? latestTotalPotDisplay : 0
-            }
-            runEntryCount={closedSnapshotLen}
-            runTotalPotPence={runPotClosed}
-          />
-        ) : null}
-        {!openCycle && canManage ? (
-          <ClubDrawCycleCreateForm
-            clubId={club.id}
-            defaultCycleNumber={nextCycleNumber}
-          />
-        ) : null}
       </section>
 
       <ClubAuditLog clubId={club.id} />
-
-      {openCycle ? (
-        <>
-          <ClubReconciliation
-            totalPotPence={totalPotPence}
-            rows={reconciliationRows}
-          />
-          {canManage ? (
-            <section className="flex flex-col gap-3">
-              <h2 className="text-lg font-medium">Mark as paid</h2>
-              <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                For the open draw cycle only: mark an active, unpaid member as
-                paid (monthly fee). Each member can only be marked once per
-                cycle.
-              </p>
-              <ClubManualPaymentList
-                clubId={club.id}
-                drawCycleId={openCycle.id}
-                rows={manualPaymentRows}
-              />
-            </section>
-          ) : null}
-        </>
-      ) : null}
-
-      <ClubMembersTable
-        clubId={club.id}
-        viewerUserId={user.id}
-        viewerRole={viewerRole}
-        members={members.map((m) => ({
-          userId: m.userId,
-          displayName: m.displayName,
-          role: m.role,
-          status: m.status,
-        }))}
-      />
     </main>
   );
 }

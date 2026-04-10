@@ -1,3 +1,8 @@
+import {
+  MembershipStatusBadge,
+  PaymentStatusBadge,
+} from "@/components/status-badges";
+
 export type ReconciliationRow = {
   membershipId: string;
   userId: string;
@@ -12,16 +17,6 @@ export type ReconciliationRow = {
     | "suspended_or_cancelled";
 };
 
-function cyclePaymentLabel(r: ReconciliationRow): string {
-  if (r.membershipStatus === "pending") {
-    return "Pending approval";
-  }
-  if (r.membershipStatus === "active") {
-    return r.hasSucceededPayment ? "Paid" : "Unpaid";
-  }
-  return "—";
-}
-
 type ClubReconciliationProps = {
   totalPotPence: number;
   rows: ReconciliationRow[];
@@ -33,18 +28,22 @@ export function ClubReconciliation({
 }: ClubReconciliationProps) {
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="text-lg font-medium">Member payments (current open cycle)</h2>
+      <h2 className="text-lg font-medium">Member payments (open cycle)</h2>
+      <p className="text-sm text-neutral-600 dark:text-neutral-400">
+        <strong className="font-medium text-neutral-800 dark:text-neutral-200">Payment</strong> is per cycle: only <strong className="font-medium">active</strong> members can show Paid. Pending members must be approved first.
+      </p>
       <p className="text-sm">
         Total pot:{" "}
         <span className="font-mono">{totalPotPence.toString()}</span> pence
       </p>
       <div className="overflow-x-auto rounded border border-neutral-300 dark:border-neutral-600">
-        <table className="w-full min-w-[28rem] border-collapse text-left text-sm">
+        <table className="w-full min-w-[36rem] border-collapse text-left text-sm">
           <thead>
             <tr className="border-b border-neutral-300 bg-neutral-50 dark:border-neutral-600 dark:bg-neutral-900">
               <th className="px-3 py-2 font-medium">Display name</th>
               <th className="px-3 py-2 font-medium">Role</th>
-              <th className="px-3 py-2 font-medium">Status</th>
+              <th className="px-3 py-2 font-medium">Membership</th>
+              <th className="px-3 py-2 font-medium">Payment</th>
             </tr>
           </thead>
           <tbody>
@@ -55,8 +54,14 @@ export function ClubReconciliation({
               >
                 <td className="px-3 py-2">{r.displayName ?? "—"}</td>
                 <td className="px-3 py-2 font-mono">{r.role}</td>
-                <td className="px-3 py-2 font-medium">
-                  {cyclePaymentLabel(r)}
+                <td className="px-3 py-2">
+                  <MembershipStatusBadge status={r.membershipStatus} />
+                </td>
+                <td className="px-3 py-2">
+                  <PaymentStatusBadge
+                    membershipStatus={r.membershipStatus}
+                    hasSucceededPayment={r.hasSucceededPayment}
+                  />
                 </td>
               </tr>
             ))}

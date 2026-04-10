@@ -2,8 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
  * v1 default destination after sign-in / sign-up when no explicit redirect is used.
- * - First owner/admin membership (by joined_at): /club/[clubId]
- * - Any other membership: /dashboard
+ * - First owner membership (by joined_at): /club/[clubId]
+ * - Admins and members: /dashboard
  * - No memberships: /create-club
  */
 export async function resolvePostAuthRedirect(
@@ -24,9 +24,9 @@ export async function resolvePostAuthRedirect(
     return "/create-club";
   }
 
-  const manage = rows.find((r) => r.role === "owner" || r.role === "admin");
-  if (manage) {
-    return `/club/${manage.club_id}`;
+  const ownerRow = rows.find((r) => r.role === "owner");
+  if (ownerRow) {
+    return `/club/${ownerRow.club_id}`;
   }
 
   return "/dashboard";

@@ -49,8 +49,14 @@ export function ClubDrawExecutionForms({
   const closeBlocked = closeCycleId != null && closeEligibleCount === 0;
 
   return (
-    <div className="flex flex-col gap-4 border border-neutral-300 p-4 dark:border-neutral-600">
-      <h3 className="text-sm font-medium">Owner / admin actions</h3>
+    <div
+      id="close-run"
+      className="flex scroll-mt-8 flex-col gap-4 rounded-lg border border-neutral-300 p-4 dark:border-neutral-600"
+    >
+      <h3 className="text-base font-medium">Close or run this cycle</h3>
+      <p className="text-xs text-neutral-600 dark:text-neutral-400">
+        Close locks who is in the draw and fixes the pot. Run draw picks the winner and creates settlements — only after close.
+      </p>
       {closeCycleId ? (
         <form action={closeAction} className="flex flex-col gap-2">
           <input type="hidden" name="club_id" value={clubId} />
