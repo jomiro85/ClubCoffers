@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { resolvePostAuthRedirect } from "@/lib/auth/post-auth-redirect";
 import { getSafeRedirectPath } from "@/lib/auth/redirect";
 import { redirect } from "next/navigation";
 
@@ -62,7 +63,10 @@ export async function signUp(
 
   if (data.session) {
     const next = getSafeRedirectPath(getTrimmed(formData, "redirect"));
-    redirect(next ?? "/");
+    if (next) {
+      redirect(next);
+    }
+    redirect(await resolvePostAuthRedirect(supabase, user.id));
   }
 
   return {
@@ -95,5 +99,16 @@ export async function signIn(
   }
 
   const next = getSafeRedirectPath(getTrimmed(formData, "redirect"));
-  redirect(next ?? "/");
+  if (next) {
+    redirect(next);
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    redirect("/sign-in");
+  }
+
+  redirect(await resolvePostAuthRedirect(supabase, user.id));
 }
