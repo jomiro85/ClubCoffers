@@ -1,24 +1,33 @@
 "use server";
 
+import {
+  getActorDisplayName,
+  insertClubAuditEvent,
+} from "@/lib/clubs/audit-helpers";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
 export type DrawCycleActionState = {
   error: string | null;
+  success?: string | null;
 };
 
-const ok: DrawCycleActionState = { error: null };
+const ok: DrawCycleActionState = { error: null, success: null };
+
+function err(message: string): DrawCycleActionState {
+  return { error: message, success: null };
+}
 
 type MembershipRole = "owner" | "admin" | "member";
 
 async function loadViewerMembership(
   clubId: string,
   userId: string
-): Promise<{ role: MembershipRole } | null> {
+): Promise<{ role: MembershipRole; status: string } | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("memberships")
-    .select("role")
+    .select("role, status")
     .eq("club_id", clubId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -26,7 +35,7 @@ async function loadViewerMembership(
   if (error || !data) return null;
   const role = data.role as MembershipRole;
   if (role !== "owner" && role !== "admin" && role !== "member") return null;
-  return { role };
+  return { role, status: data.status };
 }
 
 function assertOwnerOrAdmin(role: MembershipRole): boolean {
@@ -44,36 +53,41 @@ export async function createDrawCycle(
   const periodEndRaw = String(formData.get("period_end") ?? "").trim();
 
   if (!clubId || !name || !cycleNumberRaw || !periodStartRaw || !periodEndRaw) {
-    return { error: "All fields are required." };
+    return err("All fields are required.");
   }
 
   const cycleNumber = Number.parseInt(cycleNumberRaw, 10);
   if (!Number.isFinite(cycleNumber) || cycleNumber < 1) {
-    return { error: "Cycle number must be a positive integer." };
+    return err("Cycle number must be a positive integer.");
   }
 
   const periodStart = new Date(periodStartRaw);
   const periodEnd = new Date(periodEndRaw);
-  if (Number.isNaN(periodStart.getTime()) || Number.isNaN(periodEnd.getTime())) {
-    return { error: "Invalid period dates." };
+  if (
+    Number.isNaN(periodStart.getTime()) ||
+    Number.isNaN(periodEnd.getTime())
+  ) {
+    return err("Invalid period dates.");
   }
   if (periodEnd <= periodStart) {
-    return { error: "Period end must be after period start." };
+    return err("Period end must be after period start.");
   }
 
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) {
-    return { error: "You must be signed in." };
-  }
+  if (!user) return err("You must be signed in.");
 
   const viewer = await loadViewerMembership(clubId, user.id);
   if (!viewer || !assertOwnerOrAdmin(viewer.role)) {
-    return { error: "Only owners and admins can create draw cycles." };
+    return err("Only owners and admins can create draw cycles.");
+  }
+  if (viewer.status !== "active") {
+    return err("Your membership is not active in this club.");
   }
 
+  // Safety: no more than one open cycle at a time
   const { data: openRows } = await supabase
     .from("draw_cycles")
     .select("id")
@@ -82,32 +96,68 @@ export async function createDrawCycle(
     .limit(1);
 
   if (openRows && openRows.length > 0) {
-    return {
-      error:
-        "An open draw cycle already exists. Close or settle it before creating another.",
-    };
+    return err(
+      "An open draw cycle already exists. Close and run the draw before creating another."
+    );
   }
 
-  const { error: insertError } = await supabase.from("draw_cycles").insert({
-    club_id: clubId,
-    cycle_number: cycleNumber,
-    name,
-    period_start: periodStart.toISOString(),
-    period_end: periodEnd.toISOString(),
-    status: "open",
-  });
+  // Safety: no overlapping periods with any existing cycle.
+  // Overlap condition: newStart < existingEnd AND newEnd > existingStart.
+  // Touching endpoints (newStart === existingEnd) are allowed — that is the
+  // normal case when using "create next cycle".
+  const { data: overlapping } = await supabase
+    .from("draw_cycles")
+    .select("id, name, cycle_number")
+    .eq("club_id", clubId)
+    .lt("period_start", periodEnd.toISOString())
+    .gt("period_end", periodStart.toISOString())
+    .limit(1);
+
+  if (overlapping && overlapping.length > 0) {
+    const ex = overlapping[0] as { cycle_number: number; name: string };
+    return err(
+      `The period overlaps with Cycle ${ex.cycle_number} ("${ex.name}"). Cycles cannot have overlapping periods.`
+    );
+  }
+
+  const { data: inserted, error: insertError } = await supabase
+    .from("draw_cycles")
+    .insert({
+      club_id: clubId,
+      cycle_number: cycleNumber,
+      name,
+      period_start: periodStart.toISOString(),
+      period_end: periodEnd.toISOString(),
+      status: "open",
+    })
+    .select("id")
+    .maybeSingle();
 
   if (insertError) {
     if (insertError.code === "23505") {
-      return {
-        error: "A cycle with this number already exists for this club.",
-      };
+      return err("A cycle with this number already exists for this club.");
     }
-    return { error: insertError.message };
+    return err(insertError.message);
   }
 
+  const actorDisplayName = await getActorDisplayName(supabase, user.id);
+  await insertClubAuditEvent(supabase, {
+    actorUserId: user.id,
+    actorDisplayName,
+    clubId,
+    action: "draw_cycle.created",
+    entityType: "draw_cycle",
+    entityId: inserted?.id ?? null,
+    metadata: {
+      cycle_number: cycleNumber,
+      name,
+      period_start: periodStart.toISOString(),
+      period_end: periodEnd.toISOString(),
+    },
+  });
+
   revalidatePath(`/club/${clubId}`);
-  return ok;
+  return { error: null, success: `Cycle "${name}" created.` };
 }
 
 export async function markMemberPaidForCycle(
@@ -119,20 +169,21 @@ export async function markMemberPaidForCycle(
   const membershipId = String(formData.get("membership_id") ?? "").trim();
 
   if (!clubId || !drawCycleId || !membershipId) {
-    return { error: "Missing required fields." };
+    return err("Missing required fields.");
   }
 
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) {
-    return { error: "You must be signed in." };
-  }
+  if (!user) return err("You must be signed in.");
 
   const viewer = await loadViewerMembership(clubId, user.id);
   if (!viewer || !assertOwnerOrAdmin(viewer.role)) {
-    return { error: "Only owners and admins can mark members as paid." };
+    return err("Only owners and admins can mark members as paid.");
+  }
+  if (viewer.status !== "active") {
+    return err("Your membership is not active in this club.");
   }
 
   const { data: club, error: clubErr } = await supabase
@@ -141,9 +192,7 @@ export async function markMemberPaidForCycle(
     .eq("id", clubId)
     .maybeSingle();
 
-  if (clubErr || !club) {
-    return { error: "Club not found." };
-  }
+  if (clubErr || !club) return err("Club not found.");
 
   const { data: cycle, error: cycleErr } = await supabase
     .from("draw_cycles")
@@ -152,12 +201,12 @@ export async function markMemberPaidForCycle(
     .maybeSingle();
 
   if (cycleErr || !cycle || cycle.club_id !== clubId) {
-    return { error: "Draw cycle not found for this club." };
+    return err("Draw cycle not found for this club.");
   }
   if (cycle.status !== "open") {
-    return {
-      error: "Members can only be marked paid for the current open draw cycle.",
-    };
+    return err(
+      "Members can only be marked paid for the current open draw cycle."
+    );
   }
 
   const { data: membership, error: memErr } = await supabase
@@ -167,12 +216,10 @@ export async function markMemberPaidForCycle(
     .maybeSingle();
 
   if (memErr || !membership || membership.club_id !== clubId) {
-    return { error: "Membership not found for this club." };
+    return err("Membership not found for this club.");
   }
   if (membership.status !== "active") {
-    return {
-      error: "Only active members can be marked as paid for this cycle.",
-    };
+    return err("Only active members can be marked as paid for this cycle.");
   }
 
   const { data: existingPay } = await supabase
@@ -184,26 +231,43 @@ export async function markMemberPaidForCycle(
     .maybeSingle();
 
   if (existingPay) {
-    return {
-      error: "This member is already marked paid for this draw cycle.",
-    };
+    return err("This member is already marked paid for this draw cycle.");
   }
 
   const paidAt = new Date().toISOString();
 
-  const { error: payErr } = await supabase.from("payments").insert({
-    draw_cycle_id: drawCycleId,
-    membership_id: membershipId,
-    amount_pence: club.monthly_fee_pence,
-    currency: "GBP",
-    status: "succeeded",
-    provider: "manual_test",
-    paid_at: paidAt,
-  });
+  const { data: insertedPayment, error: payErr } = await supabase
+    .from("payments")
+    .insert({
+      draw_cycle_id: drawCycleId,
+      membership_id: membershipId,
+      amount_pence: club.monthly_fee_pence,
+      currency: "GBP",
+      status: "succeeded",
+      provider: "manual_test",
+      paid_at: paidAt,
+    })
+    .select("id")
+    .maybeSingle();
 
-  if (payErr) {
-    return { error: payErr.message };
-  }
+  if (payErr) return err(payErr.message);
+
+  const actorDisplayName = await getActorDisplayName(supabase, user.id);
+  await insertClubAuditEvent(supabase, {
+    actorUserId: user.id,
+    actorDisplayName,
+    clubId,
+    action: "payment.manual_recorded",
+    entityType: "payment",
+    entityId: insertedPayment?.id ?? null,
+    metadata: {
+      membership_id: membershipId,
+      draw_cycle_id: drawCycleId,
+      amount_pence: club.monthly_fee_pence,
+      provider: "manual_test",
+      paid_at: paidAt,
+    },
+  });
 
   revalidatePath(`/club/${clubId}`);
   return ok;

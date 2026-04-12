@@ -27,11 +27,11 @@ type MembershipRole = "owner" | "admin" | "member";
 async function loadViewerMembership(
   clubId: string,
   userId: string
-): Promise<{ role: MembershipRole } | null> {
+): Promise<{ role: MembershipRole; status: string } | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("memberships")
-    .select("role")
+    .select("role, status")
     .eq("club_id", clubId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -39,28 +39,31 @@ async function loadViewerMembership(
   if (error || !data) return null;
   const role = data.role as MembershipRole;
   if (role !== "owner" && role !== "admin" && role !== "member") return null;
-  return { role };
+  return { role, status: data.status };
 }
 
 function assertOwnerOrAdmin(role: MembershipRole): boolean {
   return role === "owner" || role === "admin";
 }
 
-async function insertDrawAuditEvent(params: {
-  actorUserId: string;
-  clubId: string;
-  action: string;
-  entityType: string;
-  entityId: string | null;
-  metadata: Record<string, unknown>;
-}) {
-  const supabase = await createClient();
-  const actorDisplayName = await getActorDisplayName(
-    supabase,
-    params.actorUserId
-  );
+/**
+ * Audit helper that reuses the caller's Supabase client so audit inserts
+ * share the same connection context and don't silently fail independently.
+ */
+async function insertDrawAuditEvent(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  actorUserId: string,
+  params: {
+    clubId: string;
+    action: string;
+    entityType: string;
+    entityId: string | null;
+    metadata: Record<string, unknown>;
+  }
+) {
+  const actorDisplayName = await getActorDisplayName(supabase, actorUserId);
   await insertClubAuditEvent(supabase, {
-    actorUserId: params.actorUserId,
+    actorUserId,
     actorDisplayName,
     clubId: params.clubId,
     action: params.action,
@@ -105,6 +108,9 @@ export async function closeDrawCycle(
       error: "Only owners and admins can close a draw cycle.",
       success: null,
     };
+  }
+  if (viewer.status !== "active") {
+    return { error: "Your membership is not active in this club.", success: null };
   }
 
   const { data: cycle, error: cycleErr } = await supabase
@@ -200,8 +206,7 @@ export async function closeDrawCycle(
     };
   }
 
-  await insertDrawAuditEvent({
-    actorUserId: user.id,
+  await insertDrawAuditEvent(supabase, user.id, {
     clubId,
     action: "draw_cycle.closed",
     entityType: "draw_cycle",
@@ -269,6 +274,9 @@ export async function runDrawCycle(
       success: null,
     };
   }
+  if (viewer.status !== "active") {
+    return { error: "Your membership is not active in this club.", success: null };
+  }
 
   const { data: cycle, error: cycleErr } = await supabase
     .from("draw_cycles")
@@ -331,7 +339,9 @@ export async function runDrawCycle(
     };
   }
 
-  const winnerIndex = randomInt(0, entryList.length - 1);
+  // randomInt(min, max) is exclusive on max, so use entryList.length (not length-1)
+  // to give every entry an equal chance.
+  const winnerIndex = randomInt(0, entryList.length);
   const winningEntry = entryList[winnerIndex];
   const winnerMembershipId = winningEntry.membership_id as string;
 
@@ -453,8 +463,7 @@ export async function runDrawCycle(
     total_pot_pence: totalPot,
   };
 
-  await insertDrawAuditEvent({
-    actorUserId: user.id,
+  await insertDrawAuditEvent(supabase, user.id, {
     clubId,
     action: "draw_cycle.draw_run",
     entityType: "draw_cycle",
@@ -465,8 +474,7 @@ export async function runDrawCycle(
     },
   });
 
-  await insertDrawAuditEvent({
-    actorUserId: user.id,
+  await insertDrawAuditEvent(supabase, user.id, {
     clubId,
     action: "draw_cycle.winner_selected",
     entityType: "draw_entry",
@@ -481,8 +489,7 @@ export async function runDrawCycle(
     },
   });
 
-  await insertDrawAuditEvent({
-    actorUserId: user.id,
+  await insertDrawAuditEvent(supabase, user.id, {
     clubId,
     action: "draw_cycle.settlements_created",
     entityType: "draw_cycle",

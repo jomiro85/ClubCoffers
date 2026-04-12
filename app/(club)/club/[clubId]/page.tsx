@@ -12,7 +12,9 @@ import { ClubDrawCycleCreateForm } from "./club-draw-cycle-create-form";
 import { ClubDrawExecutionForms } from "./club-draw-execution-forms";
 import { ClubManualPaymentList } from "./club-manual-payment-list";
 import {
+  ClubReconciliation,
   type ReconciliationRow,
+  type ReconciliationStatus,
 } from "./club-reconciliation";
 import { ClubMembersTable } from "./club-members-table";
 import { ClubNextActions } from "./club-next-actions";
@@ -24,8 +26,8 @@ type ClubPageProps = {
 function AccessDenied() {
   return (
     <main className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold">Access denied</h1>
-      <p className="text-neutral-700 dark:text-neutral-300">
+      <h1 className="text-xl font-semibold text-slate-900">Access denied</h1>
+      <p className="text-slate-600">
         You don&apos;t have access to this club, or it doesn&apos;t exist.
       </p>
     </main>
@@ -39,34 +41,137 @@ function isMemberRole(r: string): r is MemberRole {
   return (MEMBER_ROLES as readonly string[]).includes(r);
 }
 
-function buildReconciliationLabel(
+/**
+ * Derive a reconciliation status for one member in a specific cycle.
+ * Mirrors the eligibility logic in lib/clubs/draw-eligibility.ts.
+ */
+function computeReconStatus(
   membershipStatus: string,
+  joinedAt: string | null,
+  periodStart: string,
   hasSucceededPayment: boolean
-): ReconciliationRow["reconciliationLabel"] {
-  if (membershipStatus === "pending") {
-    return "pending_member";
-  }
-  if (membershipStatus === "active") {
-    return hasSucceededPayment ? "eligible_candidate" : "unpaid";
-  }
+): ReconciliationStatus {
+  if (membershipStatus === "pending") return "pending_member";
   if (
     membershipStatus === "suspended" ||
     membershipStatus === "cancelled"
-  ) {
+  )
     return "suspended_or_cancelled";
-  }
-  return "suspended_or_cancelled";
+  if (!hasSucceededPayment) return "unpaid";
+  // Has payment — check join-date eligibility
+  if (!joinedAt || !periodStart) return "paid_eligible"; // fallback: assume eligible
+  if (new Date(joinedAt) >= new Date(periodStart)) return "paid_not_eligible";
+  return "paid_eligible";
 }
 
 function formatPeriodDate(iso: string): string {
   try {
-    return new Date(iso).toLocaleString(undefined, {
-      dateStyle: "medium",
-      timeStyle: "short",
+    return new Date(iso).toLocaleDateString(undefined, {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
     });
   } catch {
     return iso;
   }
+}
+
+/** Format a Date as a datetime-local string (YYYY-MM-DDTHH:mm) in UTC.
+ *  Predictable across server environments; users can adjust after seeing the value. */
+function toDatetimeLocal(d: Date): string {
+  return d.toISOString().slice(0, 16);
+}
+
+/**
+ * Derive smart defaults for the NEXT cycle based on the previous one.
+ *
+ * Rule (simple and predictable for v1):
+ *   - nextStart = prevEnd         (starts exactly where the previous cycle ended)
+ *   - nextEnd   = prevEnd + Δ    (where Δ = prevEnd − prevStart — same duration)
+ *   - name      = "Cycle N – Month YYYY" based on nextStart
+ *
+ * Using the exact same duration (not calendar months) keeps the logic simple
+ * and deterministic regardless of month length. Owners can always adjust.
+ */
+function computeNextCycleDefaults(prevCycle: {
+  period_start: string;
+  period_end: string;
+  cycle_number: number;
+}): { name: string; periodStart: string; periodEnd: string } {
+  const prevStart = new Date(prevCycle.period_start);
+  const prevEnd = new Date(prevCycle.period_end);
+  const durationMs = prevEnd.getTime() - prevStart.getTime();
+
+  const nextStart = new Date(prevEnd);
+  const nextEnd = new Date(prevEnd.getTime() + durationMs);
+  const nextNumber = prevCycle.cycle_number + 1;
+
+  const monthName = nextStart.toLocaleString("en-GB", {
+    month: "long",
+    timeZone: "UTC",
+  });
+  const year = nextStart.getUTCFullYear();
+
+  return {
+    name: `Cycle ${nextNumber} – ${monthName} ${year}`,
+    periodStart: toDatetimeLocal(nextStart),
+    periodEnd: toDatetimeLocal(nextEnd),
+  };
+}
+
+function rolePill(role: string) {
+  const base =
+    "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium";
+  if (role === "owner")
+    return (
+      <span className={`${base} bg-slate-900 text-white`}>Owner</span>
+    );
+  if (role === "admin")
+    return (
+      <span className={`${base} bg-slate-700 text-white`}>Admin</span>
+    );
+  return (
+    <span className={`${base} bg-slate-100 text-slate-700`}>Member</span>
+  );
+}
+
+/* ── Card wrapper ─────────────────────────────────────────── */
+function Card({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`rounded-2xl border border-slate-200 bg-white shadow-sm ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+function CardHeader({
+  title,
+  description,
+  action,
+}: {
+  title: string;
+  description?: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start justify-between border-b border-slate-100 px-6 py-5">
+      <div>
+        <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+        {description ? (
+          <p className="mt-0.5 text-sm text-slate-500">{description}</p>
+        ) : null}
+      </div>
+      {action ? <div className="ml-4 shrink-0">{action}</div> : null}
+    </div>
+  );
 }
 
 export default async function ClubPage({ params }: ClubPageProps) {
@@ -77,9 +182,7 @@ export default async function ClubPage({ params }: ClubPageProps) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    return <AccessDenied />;
-  }
+  if (!user) return <AccessDenied />;
 
   const { data: club, error: clubError } = await supabase
     .from("clubs")
@@ -87,9 +190,7 @@ export default async function ClubPage({ params }: ClubPageProps) {
     .eq("id", clubId)
     .maybeSingle();
 
-  if (clubError || !club) {
-    return <AccessDenied />;
-  }
+  if (clubError || !club) return <AccessDenied />;
 
   const { data: viewerMembership } = await supabase
     .from("memberships")
@@ -125,8 +226,7 @@ export default async function ClubPage({ params }: ClubPageProps) {
 
   const allCycles = allCyclesRaw ?? [];
   const latestCycle = allCycles[0] ?? null;
-  const openCycle =
-    allCycles.find((c) => c.status === "open") ?? null;
+  const openCycle = allCycles.find((c) => c.status === "open") ?? null;
 
   let latestEligibleCount = 0;
   let latestTotalPotDisplay = 0;
@@ -135,10 +235,7 @@ export default async function ClubPage({ params }: ClubPageProps) {
       const { eligible, totalPotPence } = await getEligibleForDrawCycle(
         supabase,
         club.id,
-        {
-          id: latestCycle.id,
-          period_start: latestCycle.period_start,
-        }
+        { id: latestCycle.id, period_start: latestCycle.period_start }
       );
       latestEligibleCount = eligible.length;
       latestTotalPotDisplay = totalPotPence;
@@ -158,7 +255,7 @@ export default async function ClubPage({ params }: ClubPageProps) {
   if (membershipsError) {
     return (
       <main className="flex flex-col gap-4">
-        <h1 className="text-xl font-semibold">{club.name}</h1>
+        <h1 className="text-xl font-semibold text-slate-900">{club.name}</h1>
         <p className="text-red-600" role="alert">
           Could not load members: {membershipsError.message}
         </p>
@@ -185,6 +282,7 @@ export default async function ClubPage({ params }: ClubPageProps) {
     displayName: displayNameByUserId.get(m.user_id) ?? null,
     role: m.role,
     status: m.status,
+    joinedAt: (m.joined_at as string | null) ?? null,
   }));
 
   const pendingCount = members.filter((m) => m.status === "pending").length;
@@ -210,45 +308,57 @@ export default async function ClubPage({ params }: ClubPageProps) {
     }
   }
 
-  let succeededPayments: { membership_id: string; amount_pence: number }[] =
+  // Fetch succeeded payments for the latest cycle (covers open, closed, drawn, settled).
+  // If the latest cycle IS the open cycle the data is the same; we just widen the scope
+  // so the reconciliation panel can show historical data too.
+  let latestCyclePayments: { membership_id: string; amount_pence: number }[] =
     [];
-  if (openCycle) {
+  if (latestCycle) {
     const { data: payData } = await supabase
       .from("payments")
       .select("membership_id, amount_pence")
-      .eq("draw_cycle_id", openCycle.id)
+      .eq("draw_cycle_id", latestCycle.id)
       .eq("status", "succeeded");
-    succeededPayments = payData ?? [];
+    latestCyclePayments = payData ?? [];
   }
 
+  // For the members-table payment column we only show payment status when there is an
+  // open cycle; an empty set is correct when the payment column is hidden anyway.
   const paidMembershipIds = new Set(
-    succeededPayments.map((p) => p.membership_id)
+    openCycle ? latestCyclePayments.map((p) => p.membership_id) : []
+  );
+
+  const paymentByMembershipId = new Map(
+    latestCyclePayments.map((p) => [p.membership_id, Number(p.amount_pence ?? 0)])
   );
 
   const reconciliationRows: ReconciliationRow[] = members.map((m) => {
-    const hasSucceededPayment = paidMembershipIds.has(m.membershipId);
+    const paymentAmountPence = paymentByMembershipId.get(m.membershipId) ?? 0;
+    const hasSucceededPayment = paymentAmountPence > 0;
+    const reconStatus = computeReconStatus(
+      m.status,
+      m.joinedAt,
+      latestCycle?.period_start ?? "",
+      hasSucceededPayment
+    );
     return {
       membershipId: m.membershipId,
       userId: m.userId,
       displayName: m.displayName,
       role: m.role,
       membershipStatus: m.status,
+      joinedAt: m.joinedAt,
       hasSucceededPayment,
-      reconciliationLabel: buildReconciliationLabel(
-        m.status,
-        hasSucceededPayment
-      ),
+      paymentAmountPence,
+      reconStatus,
+      isEligible: reconStatus === "paid_eligible",
     };
   });
 
+  // Members who are active but haven't paid — shown in the "Mark as paid" form.
   const manualPaymentRows = reconciliationRows
-    .filter((r) => r.reconciliationLabel === "unpaid")
-    .map((r) => ({
-      membershipId: r.membershipId,
-      displayName: r.displayName,
-    }));
-
-  const showSensitive = viewerRole === "owner" || viewerRole === "admin";
+    .filter((r) => r.reconStatus === "unpaid")
+    .map((r) => ({ membershipId: r.membershipId, displayName: r.displayName }));
 
   const activeMemberCount = members.filter((m) => m.status === "active").length;
 
@@ -277,214 +387,218 @@ export default async function ClubPage({ params }: ClubPageProps) {
   const inviteUrl = `${proto}://${host}/join/${club.invite_token}`;
 
   const viewerStatus = viewerMembership?.status ?? "";
-
   const canCreateCycle = !openCycle && canManage;
-  const canCloseCycle = Boolean(
-    latestCycle?.status === "open" && canManage
-  );
-  const canRunDraw = Boolean(
-    latestCycle?.status === "closed" && canManage
-  );
+
+  // Smart defaults for the "create next cycle" form — derived from the previous cycle.
+  // Only computed when the form will actually be shown (canCreateCycle).
+  const nextCycleDefaults =
+    canCreateCycle && latestCycle
+      ? computeNextCycleDefaults(latestCycle)
+      : null;
+  const canCloseCycle = Boolean(latestCycle?.status === "open" && canManage);
+  const canRunDraw = Boolean(latestCycle?.status === "closed" && canManage);
 
   return (
-    <main className="mx-auto flex max-w-4xl flex-col gap-8 pb-12">
-      {/* Summary */}
-      <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-700 dark:bg-neutral-950">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-neutral-900 dark:text-neutral-50">
+    <div className="flex flex-col gap-6 pb-12">
+      {/* ── Page header ── */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
               {club.name}
             </h1>
-            <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-              Slug <span className="font-mono text-neutral-700 dark:text-neutral-300">{club.slug}</span>
-              {" · "}
-              Fee{" "}
-              <span className="font-medium text-neutral-800 dark:text-neutral-200">
-                {club.monthly_fee_pence}p
-              </span>{" "}
-              / month
-            </p>
+            {rolePill(viewerRole)}
           </div>
-          {latestCycle ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-                Latest cycle
-              </span>
-              <DrawCycleStatusBadge status={latestCycle.status} />
-            </div>
-          ) : (
-            <span className="text-sm text-neutral-500 dark:text-neutral-400">
-              No cycles yet
-            </span>
-          )}
+          <p className="mt-1 text-sm text-slate-500">
+            <span className="font-mono">{club.slug}</span>
+            <span className="mx-2 text-slate-300">·</span>
+            {club.monthly_fee_pence}p / month
+          </p>
         </div>
-        <dl className="mt-6 grid gap-4 border-t border-neutral-100 pt-6 sm:grid-cols-2 lg:grid-cols-4 dark:border-neutral-800">
-          <div>
-            <dt className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-              Active members
-            </dt>
-            <dd className="mt-1 text-2xl font-semibold tabular-nums text-neutral-900 dark:text-neutral-100">
-              {activeMemberCount}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-              Pending approval
-            </dt>
-            <dd className="mt-1 text-2xl font-semibold tabular-nums text-neutral-900 dark:text-neutral-100">
-              {pendingCount}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-              Suspended / cancelled
-            </dt>
-            <dd className="mt-1 text-2xl font-semibold tabular-nums text-neutral-900 dark:text-neutral-100">
-              {suspendedCancelledCount}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-              {openCycle ? "Current pot (open)" : "Pot (latest cycle)"}
-            </dt>
-            <dd className="mt-1 text-2xl font-semibold tabular-nums text-neutral-900 dark:text-neutral-100">
-              {summaryPotPence != null ? (
-                <>{summaryPotPence}p</>
-              ) : (
-                <span className="text-lg text-neutral-400">—</span>
-              )}
-            </dd>
-          </div>
-        </dl>
-      </section>
+        {latestCycle ? (
+          <Link
+            href={`/club/${club.id}/cycles/${latestCycle.id}`}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
+          >
+            View latest cycle →
+          </Link>
+        ) : null}
+      </div>
 
-      {/* Your membership */}
-      <section className="rounded-xl border border-neutral-200 p-5 dark:border-neutral-700">
-        <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
-          Your membership
-        </h2>
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-neutral-600 dark:text-neutral-400">Status</span>
-          <MembershipStatusBadge status={viewerStatus} />
-          <span className="text-neutral-400">·</span>
-          <span className="text-neutral-600 dark:text-neutral-400">Role</span>
-          <span className="font-mono text-xs">{viewerRole}</span>
+      {/* ── Membership status (non-active warning) ── */}
+      {viewerStatus === "pending" ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4">
+          <p className="text-sm font-medium text-amber-900">
+            Your membership is pending approval
+          </p>
+          <p className="mt-0.5 text-sm text-amber-700">
+            An owner or admin needs to approve you before you can pay fees or
+            enter a draw.
+          </p>
         </div>
-        {viewerStatus === "pending" ? (
-          <p className="mt-3 text-sm text-neutral-700 dark:text-neutral-300">
-            <strong className="font-medium">Pending</strong> means an owner or
-            admin still needs to approve you before you can pay or enter a draw.
+      ) : null}
+      {viewerStatus === "suspended" || viewerStatus === "cancelled" ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-4">
+          <p className="text-sm font-medium text-red-900">
+            Your membership is{" "}
+            <MembershipStatusBadge status={viewerStatus} />
           </p>
-        ) : null}
-        {viewerStatus === "active" ? (
-          <p className="mt-3 text-sm text-neutral-700 dark:text-neutral-300">
-            When a cycle is open, your payment for that cycle is recorded below
-            for each member. Eligibility uses active status, payment, and join
-            date vs period start.
-          </p>
-        ) : null}
-        {(viewerStatus === "suspended" || viewerStatus === "cancelled") ? (
-          <p className="mt-3 text-sm text-neutral-700 dark:text-neutral-300">
+          <p className="mt-0.5 text-sm text-red-700">
             You&apos;re not eligible for new draws in this state.
           </p>
-        ) : null}
-      </section>
+        </div>
+      ) : null}
 
-      {/* Current cycle */}
-      <section
-        id="current-cycle"
-        className="rounded-xl border border-neutral-200 p-5 dark:border-neutral-700"
-      >
-        <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
-          Current cycle
-        </h2>
-        <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-          The latest cycle drives fees and the draw. Only one cycle can be open
-          at a time.
-        </p>
-        {latestCycle ? (
-          <div className="mt-4 space-y-4">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <div>
-                <p className="text-lg font-medium text-neutral-900 dark:text-neutral-100">
-                  {latestCycle.name}
-                </p>
-                <p className="font-mono text-sm text-neutral-500 dark:text-neutral-400">
-                  Cycle #{latestCycle.cycle_number}
-                </p>
-              </div>
-              <DrawCycleStatusBadge status={latestCycle.status} />
-            </div>
-            <dl className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <dt className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-                  Period start
-                </dt>
-                <dd className="mt-0.5 font-mono text-sm text-neutral-900 dark:text-neutral-100">
-                  {formatPeriodDate(latestCycle.period_start)}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-                  Period end
-                </dt>
-                <dd className="mt-0.5 font-mono text-sm text-neutral-900 dark:text-neutral-100">
-                  {formatPeriodDate(latestCycle.period_end)}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-                  Total pot
-                </dt>
-                <dd className="mt-0.5 text-lg font-semibold tabular-nums text-neutral-900 dark:text-neutral-100">
-                  {latestTotalPotDisplay}p
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-                  Eligible entries
-                </dt>
-                <dd className="mt-0.5 text-lg font-semibold tabular-nums text-neutral-900 dark:text-neutral-100">
-                  {latestEligibleCount}
-                </dd>
-              </div>
-            </dl>
-            {(latestCycle.status === "drawn" ||
-              latestCycle.status === "settled") &&
-            winnerDisplayName ? (
-              <div className="rounded-lg border border-emerald-200 bg-emerald-50/90 px-4 py-3 dark:border-emerald-900/40 dark:bg-emerald-950/35">
-                <p className="text-xs font-medium uppercase tracking-wide text-emerald-800 dark:text-emerald-200">
-                  Result
-                </p>
-                <p className="mt-1 text-lg font-semibold text-emerald-950 dark:text-emerald-50">
-                  Winner: {winnerDisplayName}
-                </p>
-              </div>
-            ) : null}
-            {(latestCycle.status === "drawn" ||
-              latestCycle.status === "settled") &&
-            !winnerDisplayName ? (
-              <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                Draw completed — open cycle details for full results.
-              </p>
-            ) : null}
-            <Link
-              href={`/club/${club.id}/cycles/${latestCycle.id}`}
-              className="inline-flex text-sm font-medium text-neutral-900 underline underline-offset-2 hover:text-neutral-700 dark:text-neutral-100 dark:hover:text-neutral-300"
+      {/* ── Stats ── */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {[
+          {
+            label: "Active members",
+            value: activeMemberCount,
+            accent: false,
+          },
+          {
+            label: "Pending approval",
+            value: pendingCount,
+            accent: pendingCount > 0,
+          },
+          {
+            label: "Suspended / cancelled",
+            value: suspendedCancelledCount,
+            accent: false,
+          },
+          {
+            label: openCycle ? "Current pot" : "Latest pot",
+            value:
+              summaryPotPence != null ? `${summaryPotPence}p` : "—",
+            accent: false,
+          },
+        ].map((s) => (
+          <Card key={s.label} className="p-5">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              {s.label}
+            </p>
+            <p
+              className={`mt-2 text-2xl font-semibold tabular-nums ${
+                s.accent ? "text-amber-700" : "text-slate-900"
+              }`}
             >
-              View full cycle details →
-            </Link>
-          </div>
-        ) : (
-          <p className="mt-4 text-sm text-neutral-600 dark:text-neutral-400">
-            No draw cycles yet.{" "}
-            {canManage
-              ? "Create a cycle below to start collecting fees for a period."
-              : "An owner or admin will create the first cycle."}
-          </p>
-        )}
-      </section>
+              {s.value}
+            </p>
+          </Card>
+        ))}
+      </div>
 
+      {/* ── Current cycle ── */}
+      <Card>
+        <CardHeader
+          title="Current cycle"
+          description="The latest cycle drives fees and the draw."
+          action={
+            latestCycle ? (
+              <Link
+                href={`/club/${club.id}/cycles/${latestCycle.id}`}
+                className="text-sm font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900"
+              >
+                Full details
+              </Link>
+            ) : undefined
+          }
+        />
+        <div className="px-6 py-5">
+          {latestCycle ? (
+            <div className="flex flex-col gap-5">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <div>
+                  <p className="text-lg font-semibold text-slate-900">
+                    {latestCycle.name}
+                  </p>
+                  <p className="text-sm text-slate-500">
+                    Cycle #{latestCycle.cycle_number}
+                  </p>
+                </div>
+                <DrawCycleStatusBadge status={latestCycle.status} />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {[
+                  {
+                    label: "Period start",
+                    value: formatPeriodDate(latestCycle.period_start),
+                    mono: false,
+                  },
+                  {
+                    label: "Period end",
+                    value: formatPeriodDate(latestCycle.period_end),
+                    mono: false,
+                  },
+                  {
+                    label: "Total pot",
+                    value: `${latestTotalPotDisplay}p`,
+                    mono: true,
+                  },
+                  {
+                    label: "Eligible entries",
+                    value: String(latestEligibleCount),
+                    mono: true,
+                  },
+                ].map((d) => (
+                  <div key={d.label}>
+                    <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                      {d.label}
+                    </p>
+                    <p
+                      className={`mt-1 text-base font-semibold text-slate-900 ${d.mono ? "font-mono" : ""}`}
+                    >
+                      {d.value}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              {(latestCycle.status === "drawn" ||
+                latestCycle.status === "settled") &&
+              winnerDisplayName ? (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-4">
+                  <p className="text-xs font-medium uppercase tracking-wide text-emerald-700">
+                    Draw result
+                  </p>
+                  <p className="mt-1 text-xl font-bold text-emerald-900">
+                    {winnerDisplayName}
+                  </p>
+                  <p className="mt-0.5 text-sm text-emerald-700">
+                    Winner of this cycle
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center">
+              <p className="text-sm font-medium text-slate-600">
+                No draw cycles yet
+              </p>
+              <p className="mt-1 text-sm text-slate-400">
+                {canManage
+                  ? "Create your first cycle below when you're ready."
+                  : "An owner or admin will create the first cycle."}
+              </p>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* ── Reconciliation (owner/admin) ── */}
+      {canManage && latestCycle ? (
+        <ClubReconciliation
+          cycleName={latestCycle.name}
+          cycleNumber={latestCycle.cycle_number}
+          cycleStatus={latestCycle.status}
+          monthlyFeePence={club.monthly_fee_pence}
+          rows={reconciliationRows}
+        />
+      ) : null}
+
+      {/* ── Next actions (owner/admin) ── */}
       {canManage ? (
         <ClubNextActions
           clubId={club.id}
@@ -497,13 +611,18 @@ export default async function ClubPage({ params }: ClubPageProps) {
         />
       ) : null}
 
+      {/* ── Create cycle ── */}
       {canCreateCycle ? (
         <ClubDrawCycleCreateForm
           clubId={club.id}
           defaultCycleNumber={nextCycleNumber}
+          defaultName={nextCycleDefaults?.name}
+          defaultPeriodStart={nextCycleDefaults?.periodStart}
+          defaultPeriodEnd={nextCycleDefaults?.periodEnd}
         />
       ) : null}
 
+      {/* ── Close / run draw ── */}
       {canManage ? (
         <ClubDrawExecutionForms
           clubId={club.id}
@@ -524,12 +643,15 @@ export default async function ClubPage({ params }: ClubPageProps) {
         />
       ) : null}
 
+      {/* ── Invite link ── */}
       <ClubInviteLink
+        clubId={club.id}
         inviteUrl={inviteUrl}
         inviteToken={club.invite_token}
-        showToken={showSensitive}
+        canManage={canManage}
       />
 
+      {/* ── Members ── */}
       <ClubMembersTable
         clubId={club.id}
         viewerUserId={user.id}
@@ -545,90 +667,108 @@ export default async function ClubPage({ params }: ClubPageProps) {
         }))}
       />
 
+      {/* ── Mark as paid ── */}
       {openCycle && canManage ? (
-        <section
-          id="mark-paid"
-          className="scroll-mt-8 rounded-xl border border-neutral-200 p-5 dark:border-neutral-700"
-        >
-          <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
-            Mark as paid
-          </h2>
-          <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-            Record that an <strong className="font-medium text-neutral-800 dark:text-neutral-200">active</strong> member has paid the fee for the open cycle. Each member once per cycle.
-          </p>
-          <div className="mt-4">
+        <Card>
+          <CardHeader
+            title="Mark as paid"
+            description="Record that an active member has paid the fee for the open cycle. Each member once per cycle."
+          />
+          <div
+            id="mark-paid"
+            className="scroll-mt-8 px-6 py-5"
+          >
             <ClubManualPaymentList
               clubId={club.id}
               drawCycleId={openCycle.id}
               rows={manualPaymentRows}
             />
           </div>
-        </section>
+        </Card>
       ) : null}
 
-      {/* All cycles */}
-      <section className="rounded-xl border border-neutral-200 p-5 dark:border-neutral-700">
-        <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
-          All cycles
-        </h2>
-        <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-          History of every cycle. Open → closed → drawn. Follow a name for the
-          full audit trail.
-        </p>
-        {allCycles.length > 0 ? (
-          <div className="mt-4 overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-600">
-            <table className="w-full min-w-[28rem] border-collapse text-left text-sm">
-              <thead>
-                <tr className="border-b border-neutral-200 bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900/80">
-                  <th className="px-3 py-2.5 font-medium">#</th>
-                  <th className="px-3 py-2.5 font-medium">Name</th>
-                  <th className="px-3 py-2.5 font-medium">Status</th>
-                  <th className="px-3 py-2.5 font-medium"> </th>
-                </tr>
-              </thead>
-              <tbody>
-                {allCycles.map((c) => {
-                  const isLatest = c.id === latestCycle?.id;
-                  return (
-                    <tr
-                      key={c.id}
-                      className={
-                        isLatest
-                          ? "border-b border-neutral-100 bg-neutral-50/80 dark:border-neutral-800 dark:bg-neutral-900/50"
-                          : "border-b border-neutral-100 dark:border-neutral-800"
-                      }
-                    >
-                      <td className="px-3 py-2.5 font-mono text-neutral-600 dark:text-neutral-400">
-                        {c.cycle_number}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <Link
-                          href={`/club/${club.id}/cycles/${c.id}`}
-                          className="font-medium text-neutral-900 underline underline-offset-2 dark:text-neutral-100"
-                        >
-                          {c.name}
-                        </Link>
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <DrawCycleStatusBadge status={c.status} />
-                      </td>
-                      <td className="px-3 py-2.5 text-xs text-neutral-500 dark:text-neutral-400">
-                        {isLatest ? "Latest" : ""}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="mt-4 text-sm text-neutral-600 dark:text-neutral-400">
-            No cycles yet.
-          </p>
-        )}
-      </section>
+      {/* ── All cycles ── */}
+      <Card>
+        <CardHeader
+          title="Cycle history"
+          description="All draw cycles for this club, most recent first."
+        />
+        <div className="px-6 py-5">
+          {allCycles.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[36rem] border-collapse text-left text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="pb-3 pr-4 text-xs font-medium uppercase tracking-wide text-slate-500">
+                      #
+                    </th>
+                    <th className="pb-3 pr-4 text-xs font-medium uppercase tracking-wide text-slate-500">
+                      Name
+                    </th>
+                    <th className="pb-3 pr-4 text-xs font-medium uppercase tracking-wide text-slate-500">
+                      Period
+                    </th>
+                    <th className="pb-3 pr-4 text-xs font-medium uppercase tracking-wide text-slate-500">
+                      Pot
+                    </th>
+                    <th className="pb-3 pr-4 text-xs font-medium uppercase tracking-wide text-slate-500">
+                      Status
+                    </th>
+                    <th className="pb-3 text-xs font-medium uppercase tracking-wide text-slate-500" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {allCycles.map((c) => {
+                    const isLatest = c.id === latestCycle?.id;
+                    const potPence = Number(c.total_pot_pence ?? 0);
+                    return (
+                      <tr
+                        key={c.id}
+                        className={`border-b border-slate-50 last:border-0 ${
+                          isLatest ? "bg-slate-50/60" : ""
+                        }`}
+                      >
+                        <td className="py-3 pr-4 font-mono text-sm text-slate-500">
+                          {c.cycle_number}
+                        </td>
+                        <td className="py-3 pr-4 font-medium text-slate-900">
+                          <Link
+                            href={`/club/${club.id}/cycles/${c.id}`}
+                            className="underline underline-offset-2 hover:text-slate-700"
+                          >
+                            {c.name}
+                          </Link>
+                        </td>
+                        <td className="py-3 pr-4 text-sm text-slate-500">
+                          {formatPeriodDate(c.period_start)}
+                          <span className="mx-1 text-slate-300">–</span>
+                          {formatPeriodDate(c.period_end)}
+                        </td>
+                        <td className="py-3 pr-4 font-mono text-sm text-slate-700">
+                          {potPence > 0 ? `${potPence.toLocaleString("en-GB")}p` : (
+                            <span className="text-slate-400">—</span>
+                          )}
+                        </td>
+                        <td className="py-3 pr-4">
+                          <DrawCycleStatusBadge status={c.status} />
+                        </td>
+                        <td className="py-3 text-xs text-slate-400">
+                          {isLatest ? "Current" : ""}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">No cycles yet.</p>
+          )}
+        </div>
+      </Card>
 
+      {/* ── Audit log ── */}
       <ClubAuditLog clubId={club.id} />
-    </main>
+    </div>
   );
 }

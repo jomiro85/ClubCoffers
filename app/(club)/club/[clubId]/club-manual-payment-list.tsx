@@ -6,7 +6,7 @@ import {
   markMemberPaidForCycle,
 } from "@/lib/clubs/draw-cycle-actions";
 
-const initial: DrawCycleActionState = { error: null };
+const initial: DrawCycleActionState = { error: null, success: null };
 
 type PaymentRow = {
   membershipId: string;

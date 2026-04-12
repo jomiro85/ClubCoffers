@@ -76,6 +76,47 @@ export async function signUp(
   };
 }
 
+export async function signOut(): Promise<never> {
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  redirect("/");
+}
+
+export type ProfileActionState = {
+  error: string | null;
+  success?: string | null;
+};
+
+export async function updateDisplayName(
+  _prevState: ProfileActionState,
+  formData: FormData
+): Promise<ProfileActionState> {
+  const displayName = String(formData.get("display_name") ?? "").trim();
+
+  if (displayName.length > 200) {
+    return { error: "Display name must be 200 characters or fewer." };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "You must be signed in." };
+  }
+
+  const { error: updateError } = await supabase
+    .from("profiles")
+    .upsert({ id: user.id, display_name: displayName || null }, { onConflict: "id" });
+
+  if (updateError) {
+    return { error: updateError.message };
+  }
+
+  return { error: null, success: "Display name updated." };
+}
+
 export async function signIn(
   _prevState: AuthActionState,
   formData: FormData

@@ -10,14 +10,14 @@ type ClubNextActionsProps = {
   canRunDraw: boolean;
 };
 
-function actionClass(enabled: boolean): string {
-  const base =
-    "inline-flex items-center justify-center rounded-lg border px-3 py-2 text-sm font-medium transition-colors";
-  if (enabled) {
-    return `${base} border-neutral-900 bg-neutral-900 text-white hover:bg-neutral-800 dark:border-neutral-100 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-white`;
-  }
-  return `${base} cursor-not-allowed border-neutral-200 bg-neutral-100 text-neutral-400 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-500`;
-}
+const enabledBtn =
+  "inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-slate-50 hover:border-slate-300";
+
+const disabledBtn =
+  "inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-400 cursor-not-allowed select-none";
+
+const primaryBtn =
+  "inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white shadow-sm transition-colors hover:bg-slate-800";
 
 export function ClubNextActions({
   clubId,
@@ -30,111 +30,99 @@ export function ClubNextActions({
 }: ClubNextActionsProps) {
   return (
     <section
-      className="rounded-xl border border-neutral-200 bg-neutral-50/80 p-5 dark:border-neutral-700 dark:bg-neutral-900/40"
-      aria-labelledby="next-actions-heading"
+      id="next-actions"
+      className="scroll-mt-8 rounded-2xl border border-slate-200 bg-white shadow-sm"
     >
-      <h2
-        id="next-actions-heading"
-        className="text-base font-semibold text-neutral-900 dark:text-neutral-100"
-      >
-        Next actions
-      </h2>
-      <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">
-        <strong className="font-medium text-neutral-800 dark:text-neutral-200">
-          Pending
-        </strong>{" "}
-        means the person has requested to join but isn&apos;t active yet — they
-        can&apos;t pay or enter a draw until approved.{" "}
-        <strong className="font-medium text-neutral-800 dark:text-neutral-200">
-          Closing
-        </strong>{" "}
-        a cycle locks who is in the draw and fixes the pot. The{" "}
-        <strong className="font-medium text-neutral-800 dark:text-neutral-200">
-          draw
-        </strong>{" "}
-        can only run after close, with at least one entry (eligible, paid
-        members).
-      </p>
-      <ul className="mt-4 grid gap-2 sm:grid-cols-2">
-        <li>
-          <a href="#members" className={actionClass(true)}>
-            Approve pending members
+      <div className="border-b border-slate-100 px-6 py-5">
+        <h2 className="text-base font-semibold text-slate-900">
+          Next actions
+        </h2>
+        <p className="mt-0.5 text-sm text-slate-500">
+          Actions available based on current club state. Greyed-out actions
+          aren&apos;t available yet.
+        </p>
+      </div>
+
+      <div className="px-6 py-5">
+        {/* Helper note */}
+        <div className="mb-5 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          <strong className="font-medium text-slate-800">Pending</strong> means
+          waiting for your approval — they can&apos;t pay or enter draws until
+          active.{" "}
+          <strong className="font-medium text-slate-800">Closing</strong> a
+          cycle locks the entry list and fixes the pot.{" "}
+          <strong className="font-medium text-slate-800">Run draw</strong> is
+          only available after close.
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {/* Approve pending */}
+          <a href="#members" className={pendingCount > 0 ? primaryBtn : enabledBtn}>
             {pendingCount > 0 ? (
-              <span className="ml-2 rounded-full bg-white/20 px-2 py-0.5 text-xs">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-xs font-bold">
                 {pendingCount}
               </span>
             ) : null}
+            Approve members
           </a>
-        </li>
-        <li>
+
+          {/* Create cycle */}
           {canCreateCycle ? (
-            <a href="#create-cycle" className={actionClass(true)}>
+            <a href="#create-cycle" className={enabledBtn}>
               Create cycle
             </a>
           ) : (
-            <span
-              className={actionClass(false)}
-              title="There is already an open cycle, or you cannot create one."
-            >
+            <span className={disabledBtn} title="Close or finish the current open cycle first.">
               Create cycle
             </span>
           )}
-        </li>
-        <li>
+
+          {/* Mark paid */}
           {hasOpenCycle ? (
-            <a href="#mark-paid" className={actionClass(true)}>
+            <a href="#mark-paid" className={enabledBtn}>
               Mark as paid
             </a>
           ) : (
-            <span
-              className={actionClass(false)}
-              title="Open a cycle first to record payments."
-            >
+            <span className={disabledBtn} title="Requires an open cycle.">
               Mark as paid
             </span>
           )}
-        </li>
-        <li>
+
+          {/* Close cycle */}
           {canCloseCycle ? (
-            <a href="#close-run" className={actionClass(true)}>
+            <a href="#close-run" className={enabledBtn}>
               Close cycle
             </a>
           ) : (
-            <span
-              className={actionClass(false)}
-              title="Requires an open cycle."
-            >
+            <span className={disabledBtn} title="Requires an open cycle.">
               Close cycle
             </span>
           )}
-        </li>
-        <li>
+
+          {/* Run draw */}
           {canRunDraw ? (
-            <a href="#close-run" className={actionClass(true)}>
+            <a href="#close-run" className={primaryBtn}>
               Run draw
             </a>
           ) : (
-            <span
-              className={actionClass(false)}
-              title="Requires a closed cycle with entries."
-            >
+            <span className={disabledBtn} title="Requires a closed cycle with entries.">
               Run draw
             </span>
           )}
-        </li>
-        <li>
+
+          {/* View cycle details */}
           {latestCycleId ? (
             <Link
               href={`/club/${clubId}/cycles/${latestCycleId}`}
-              className={actionClass(true)}
+              className={enabledBtn}
             >
               View cycle details
             </Link>
           ) : (
-            <span className={actionClass(false)}>View cycle details</span>
+            <span className={disabledBtn}>View cycle details</span>
           )}
-        </li>
-      </ul>
+        </div>
+      </div>
     </section>
   );
 }

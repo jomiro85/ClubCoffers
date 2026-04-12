@@ -16,13 +16,15 @@ type ClubDrawExecutionFormsProps = {
   clubId: string;
   closeCycleId: string | null;
   runCycleId: string | null;
-  /** Shown next to close action; required when closing. */
   closeEligibleCount: number;
   closeTotalPotPence: number;
-  /** Shown next to run action. */
   runEntryCount: number;
   runTotalPotPence: number;
 };
+
+function fmtPence(p: number) {
+  return `${p.toLocaleString("en-GB")}p`;
+}
 
 export function ClubDrawExecutionForms({
   clubId,
@@ -37,129 +39,160 @@ export function ClubDrawExecutionForms({
     closeDrawCycle,
     initial
   );
-  const [runState, runAction, runPending] = useActionState(
-    runDrawCycle,
-    initial
-  );
+  const [runState, runAction, runPending] = useActionState(runDrawCycle, initial);
 
-  if (!closeCycleId && !runCycleId) {
-    return null;
-  }
+  if (!closeCycleId && !runCycleId) return null;
 
   const closeBlocked = closeCycleId != null && closeEligibleCount === 0;
+  const runBlocked = runCycleId != null && runEntryCount === 0;
 
   return (
-    <div
+    <section
       id="close-run"
-      className="flex scroll-mt-8 flex-col gap-4 rounded-lg border border-neutral-300 p-4 dark:border-neutral-600"
+      className="scroll-mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
     >
-      <h3 className="text-base font-medium">Close or run this cycle</h3>
-      <p className="text-xs text-neutral-600 dark:text-neutral-400">
-        Close locks who is in the draw and fixes the pot. Run draw picks the winner and creates settlements — only after close.
-      </p>
-      {closeCycleId ? (
-        <form action={closeAction} className="flex flex-col gap-2">
-          <input type="hidden" name="club_id" value={clubId} />
-          <input type="hidden" name="draw_cycle_id" value={closeCycleId} />
-          <div
-            className="rounded border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-900/50 dark:bg-amber-950/30"
-            role="status"
-          >
-            <p className="font-medium text-amber-950 dark:text-amber-100">
-              Before closing
-            </p>
-            <ul className="mt-1 list-inside list-disc text-amber-900 dark:text-amber-200">
-              <li>
-                Eligible members (will become draw entries):{" "}
-                <span className="font-mono">{closeEligibleCount}</span>
-              </li>
-              <li>
-                Total pot (succeeded payments):{" "}
-                <span className="font-mono">{closeTotalPotPence}</span> pence
-              </li>
-            </ul>
-            {closeBlocked ? (
-              <p className="mt-2 text-red-700 dark:text-red-300" role="alert">
-                You cannot close this cycle: there must be at least one eligible
-                member (active, paid, joined before period start).
+      <div className="border-b border-slate-100 px-6 py-5">
+        <h2 className="text-base font-semibold text-slate-900">
+          {closeCycleId ? "Close cycle" : "Run draw"}
+        </h2>
+        <p className="mt-0.5 text-sm text-slate-500">
+          {closeCycleId
+            ? "Closing locks the entry list and fixes the pot. The draw can only be run after the cycle is closed."
+            : "Pick one winner at random from the eligible entries. This cannot be undone or re-run."}
+        </p>
+      </div>
+
+      <div className="px-6 py-5">
+        {/* ── Close ── */}
+        {closeCycleId ? (
+          <form action={closeAction} className="flex flex-col gap-4">
+            <input type="hidden" name="club_id" value={clubId} />
+            <input type="hidden" name="draw_cycle_id" value={closeCycleId} />
+
+            {/* Pre-close summary */}
+            <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-4">
+              <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+                Before closing
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs font-medium text-slate-500">
+                    Eligible entries
+                  </p>
+                  <p className="mt-0.5 text-xl font-semibold tabular-nums text-slate-900">
+                    {closeEligibleCount}
+                  </p>
+                  <p className="mt-0.5 text-xs text-slate-400">
+                    Active, paid, joined before period start
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-slate-500">
+                    Total pot
+                  </p>
+                  <p className="mt-0.5 font-mono text-xl font-semibold text-slate-900">
+                    {fmtPence(closeTotalPotPence)}
+                  </p>
+                  <p className="mt-0.5 text-xs text-slate-400">
+                    Sum of succeeded payments
+                  </p>
+                </div>
+              </div>
+              {closeBlocked ? (
+                <p
+                  className="mt-3 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700"
+                  role="alert"
+                >
+                  Cannot close: at least one active member must have paid and
+                  joined before the period start.
+                </p>
+              ) : null}
+            </div>
+
+            {closeState.error ? (
+              <p className="text-sm text-red-600" role="alert">
+                {closeState.error}
               </p>
             ) : null}
-          </div>
-          {closeState.error ? (
-            <p className="text-sm text-red-600" role="alert">
-              {closeState.error}
-            </p>
-          ) : null}
-          {closeState.success ? (
-            <p className="text-sm text-green-800 dark:text-green-300">
-              {closeState.success}
-            </p>
-          ) : null}
-          <button
-            type="submit"
-            disabled={closePending || closeBlocked}
-            className="w-fit rounded bg-neutral-900 px-3 py-2 text-sm text-white disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900"
-          >
-            {closePending ? "Closing…" : "Close cycle"}
-          </button>
-          <p className="text-xs text-neutral-600 dark:text-neutral-400">
-            Locks entries from eligible members with succeeded payments (joined
-            before period start), sets the pot total, and closes the cycle.
-          </p>
-        </form>
-      ) : null}
-      {runCycleId ? (
-        <form action={runAction} className="flex flex-col gap-2">
-          <input type="hidden" name="club_id" value={clubId} />
-          <input type="hidden" name="draw_cycle_id" value={runCycleId} />
-          <div
-            className="rounded border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-900/50 dark:bg-amber-950/30"
-            role="status"
-          >
-            <p className="font-medium text-amber-950 dark:text-amber-100">
-              Draw check
-            </p>
-            <ul className="mt-1 list-inside list-disc text-amber-900 dark:text-amber-200">
-              <li>
-                Draw entries:{" "}
-                <span className="font-mono">{runEntryCount}</span>
-              </li>
-              <li>
-                Total pot:{" "}
-                <span className="font-mono">{runTotalPotPence}</span> pence
-              </li>
-            </ul>
-            {runEntryCount === 0 ? (
-              <p className="mt-2 text-red-700 dark:text-red-300" role="alert">
-                Cannot run: this cycle has no draw entries. Close the cycle
-                first with at least one eligible member.
+            {closeState.success ? (
+              <p className="text-sm text-emerald-700">{closeState.success}</p>
+            ) : null}
+
+            <button
+              type="submit"
+              disabled={closePending || closeBlocked}
+              className="w-fit rounded-lg border border-amber-600 bg-amber-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-amber-700 disabled:opacity-50"
+            >
+              {closePending ? "Closing…" : "Close cycle"}
+            </button>
+          </form>
+        ) : null}
+
+        {/* ── Run draw ── */}
+        {runCycleId ? (
+          <form action={runAction} className="flex flex-col gap-4">
+            <input type="hidden" name="club_id" value={clubId} />
+            <input type="hidden" name="draw_cycle_id" value={runCycleId} />
+
+            {/* Pre-draw summary */}
+            <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-4">
+              <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+                Draw check
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs font-medium text-slate-500">
+                    Draw entries
+                  </p>
+                  <p className="mt-0.5 text-xl font-semibold tabular-nums text-slate-900">
+                    {runEntryCount}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-slate-500">
+                    Total pot
+                  </p>
+                  <p className="mt-0.5 font-mono text-xl font-semibold text-slate-900">
+                    {fmtPence(runTotalPotPence)}
+                  </p>
+                </div>
+              </div>
+              {runBlocked ? (
+                <p
+                  className="mt-3 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700"
+                  role="alert"
+                >
+                  Cannot run: this cycle has no draw entries. Close the cycle
+                  with at least one eligible member first.
+                </p>
+              ) : null}
+              {!runBlocked ? (
+                <p className="mt-3 text-xs text-slate-500">
+                  Split: 57% club · 35% winner · 8% platform. Cannot be run
+                  twice.
+                </p>
+              ) : null}
+            </div>
+
+            {runState.error ? (
+              <p className="text-sm text-red-600" role="alert">
+                {runState.error}
               </p>
             ) : null}
-          </div>
-          {runState.error ? (
-            <p className="text-sm text-red-600" role="alert">
-              {runState.error}
-            </p>
-          ) : null}
-          {runState.success ? (
-            <p className="text-sm text-green-800 dark:text-green-300">
-              {runState.success}
-            </p>
-          ) : null}
-          <button
-            type="submit"
-            disabled={runPending || runEntryCount === 0}
-            className="w-fit rounded bg-neutral-900 px-3 py-2 text-sm text-white disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900"
-          >
-            {runPending ? "Running…" : "Run draw"}
-          </button>
-          <p className="text-xs text-neutral-600 dark:text-neutral-400">
-            Picks one winner at random, records settlement splits (57% club, 35%
-            winner, 8% platform), and marks the cycle as drawn. Cannot be run
-            twice.
-          </p>
-        </form>
-      ) : null}
-    </div>
+            {runState.success ? (
+              <p className="text-sm text-emerald-700">{runState.success}</p>
+            ) : null}
+
+            <button
+              type="submit"
+              disabled={runPending || runBlocked}
+              className="w-fit rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-slate-800 disabled:opacity-50"
+            >
+              {runPending ? "Running draw…" : "Run draw"}
+            </button>
+          </form>
+        ) : null}
+      </div>
+    </section>
   );
 }
