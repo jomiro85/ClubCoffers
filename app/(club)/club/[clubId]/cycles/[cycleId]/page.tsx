@@ -56,7 +56,7 @@ function CardHeader({
   return (
     <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
       <div>
-        <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+        <h2 className="text-base font-semibold text-[#0c1526]">{title}</h2>
         {description ? (
           <p className="mt-0.5 text-sm text-slate-500">{description}</p>
         ) : null}
@@ -267,44 +267,45 @@ export default async function ClubCyclePage({ params }: CyclePageProps) {
   }
 
   return (
-    <main className="flex flex-col gap-6 pb-12">
+    <main className="flex flex-col gap-6 pb-16">
       {/* Breadcrumb */}
-      <nav className="pt-2 text-sm">
+      <nav className="pt-1 text-sm">
         <Link
           href={`/club/${clubId}`}
-          className="font-medium text-slate-500 underline underline-offset-2 hover:text-slate-700"
+          className="font-medium text-slate-400 transition-colors hover:text-slate-700"
         >
           ← {club.name}
         </Link>
       </nav>
 
       {/* Page header */}
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-2 border-l-[3px] border-[#0f2444] pl-4">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+          <h1 className="text-2xl font-bold tracking-tight text-[#0c1526]">
             {cycle.name}
           </h1>
           <DrawCycleStatusBadge status={cycle.status} />
         </div>
         <p className="text-sm text-slate-500">
-          Cycle #{cycle.cycle_number} ·{" "}
+          Cycle #{cycle.cycle_number}
+          <span className="mx-2 text-slate-300">·</span>
           {formatPeriodDate(cycle.period_start)}
-          {" – "}
+          <span className="mx-1.5 text-slate-300">–</span>
           {formatPeriodDate(cycle.period_end)}
         </p>
       </div>
 
       {/* Winner banner */}
       {showWinnerBanner ? (
-        <div className="flex flex-col gap-1 rounded-2xl border border-emerald-200 bg-emerald-50 px-6 py-5">
+        <div className="flex flex-col gap-1.5 rounded-2xl border border-emerald-200 bg-emerald-50 px-6 py-5">
           <p className="text-xs font-semibold uppercase tracking-widest text-emerald-600">
             Draw result
           </p>
-          <p className="text-xl font-semibold text-emerald-900">
-            {winnerName ?? "—"} won
+          <p className="text-2xl font-bold text-emerald-900">
+            {winnerName ?? "—"}
           </p>
           <p className="text-sm text-emerald-700">
-            This result is final. The pot split is recorded below.
+            This result is final. The full pot split is recorded below.
           </p>
         </div>
       ) : null}
@@ -316,22 +317,22 @@ export default async function ClubCyclePage({ params }: CyclePageProps) {
           badge={<MembershipStatusBadge status={viewerMembership.status} />}
         />
         <div className="px-6 py-5">
-          <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-3 text-sm">
-            <dt className="font-medium text-slate-500">Role</dt>
-            <dd className="text-slate-900 capitalize">{viewerMembership.role}</dd>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-8 gap-y-4 text-sm">
+            <dt className="font-medium text-slate-400">Role</dt>
+            <dd className="font-medium capitalize text-[#0c1526]">{viewerMembership.role}</dd>
 
             {viewerMembership.status === "active" ? (
               <>
-                <dt className="font-medium text-slate-500">Payment</dt>
+                <dt className="font-medium text-slate-400">Payment</dt>
                 <dd>
                   {hasSucceededPayment ? (
-                    <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                    <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
                       Paid{viewerPaymentRow?.amount_pence
                         ? ` · ${fmtPence(Number(viewerPaymentRow.amount_pence))}`
                         : ""}
                     </span>
                   ) : (
-                    <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                    <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20">
                       Not paid
                     </span>
                   )}
@@ -339,15 +340,15 @@ export default async function ClubCyclePage({ params }: CyclePageProps) {
 
                 {cycle.status === "open" || viewerEntry ? (
                   <>
-                    <dt className="font-medium text-slate-500">Eligible</dt>
+                    <dt className="font-medium text-slate-400">Eligible</dt>
                     <dd>
                       {cycle.status === "open" ? (
                         eligibleWhileOpen ? (
-                          <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                          <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
                             Yes — in the draw
                           </span>
                         ) : (
-                          <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-500">
+                          <span className="inline-flex items-center rounded-full bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-500 ring-1 ring-inset ring-slate-500/10">
                             No
                           </span>
                         )
@@ -376,12 +377,12 @@ export default async function ClubCyclePage({ params }: CyclePageProps) {
               line.startsWith("Your membership has been cancelled");
             return (
               <p
-                className={`mt-4 rounded-xl border px-4 py-3 text-sm ${
+                className={`mt-5 rounded-xl border px-4 py-3.5 text-sm leading-relaxed ${
                   isPositive
                     ? "border-emerald-100 bg-emerald-50 text-emerald-800"
                     : isWarning
                       ? "border-amber-100 bg-amber-50 text-amber-800"
-                      : "border-slate-100 bg-slate-50 text-slate-700"
+                      : "border-slate-100 bg-slate-50 text-slate-600"
                 }`}
               >
                 {line}
@@ -391,37 +392,91 @@ export default async function ClubCyclePage({ params }: CyclePageProps) {
         </div>
       </Card>
 
+      {/* How draws work — plain-language explainer for members */}
+      {viewerMembership.role === "member" ? (
+        <details className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <summary className="flex cursor-pointer select-none items-center justify-between px-6 py-4 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+            How draws work
+            <svg
+              className="h-4 w-4 text-slate-400 transition-transform group-open:rotate-180"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </summary>
+          <div className="border-t border-slate-100 px-6 pb-6 pt-5">
+            <ol className="flex flex-col gap-5 text-sm text-slate-600">
+              {[
+                {
+                  n: "1",
+                  title: "The cycle opens",
+                  body: "Members pay their monthly fee. You must pay before the cycle closes to get a draw entry.",
+                },
+                {
+                  n: "2",
+                  title: "Eligibility is checked",
+                  body: "To be eligible: active membership, fee paid, and joined before the cycle started.",
+                },
+                {
+                  n: "3",
+                  title: "The cycle closes and the draw runs",
+                  body: "The club owner locks the entry pool, then runs the draw. One eligible member is picked at random.",
+                },
+                {
+                  n: "4",
+                  title: "The pot is settled",
+                  body: "The winner receives the majority of the pot. A share goes to the club and a Coffers fee is deducted.",
+                },
+              ].map((step) => (
+                <li key={step.n} className="flex gap-4">
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#e8eef7] text-xs font-bold text-[#0f2444]">
+                    {step.n}
+                  </span>
+                  <div>
+                    <p className="font-semibold text-[#0c1526]">{step.title}</p>
+                    <p className="mt-1 leading-relaxed text-slate-500">{step.body}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </details>
+      ) : null}
+
       {/* Cycle details */}
       <Card id="cycle-details">
         <CardHeader
           title="Cycle details"
-          description="Open → closed → drawn → settled. Each step is one-way."
+          description="Open → closed → drawn → settled. Each step is one-way and irreversible."
         />
         <div className="px-6 py-5">
-          <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-3 text-sm">
-            <dt className="font-medium text-slate-500">Period</dt>
-            <dd className="text-slate-900">
+          <dl className="grid grid-cols-[auto_1fr] gap-x-8 gap-y-4 text-sm">
+            <dt className="font-medium text-slate-400">Period</dt>
+            <dd className="font-medium text-[#0c1526]">
               {formatPeriodDate(cycle.period_start)}
               <span className="mx-1.5 text-slate-300">–</span>
               {formatPeriodDate(cycle.period_end)}
             </dd>
             {totalPot > 0 ? (
               <>
-                <dt className="font-medium text-slate-500">Total pot</dt>
-                <dd className="font-mono text-slate-900">{fmtPence(totalPot)}</dd>
+                <dt className="font-medium text-slate-400">Total pot</dt>
+                <dd className="font-mono font-semibold text-[#0c1526]">{fmtPence(totalPot)}</dd>
               </>
             ) : null}
             {winnerShare > 0 ? (
               <>
-                <dt className="font-medium text-slate-500">Winner receives</dt>
-                <dd className="font-mono text-slate-900">
+                <dt className="font-medium text-slate-400">Winner receives</dt>
+                <dd className="font-mono font-semibold text-emerald-700">
                   {fmtPence(winnerShare)}
                 </dd>
-                <dt className="font-medium text-slate-500">Club keeps</dt>
-                <dd className="font-mono text-slate-900">
+                <dt className="font-medium text-slate-400">Club keeps</dt>
+                <dd className="font-mono font-semibold text-[#0c1526]">
                   {fmtPence(clubShare)}
                 </dd>
-                <dt className="font-medium text-slate-500">Platform fee</dt>
+                <dt className="font-medium text-slate-400">Coffers fee</dt>
                 <dd className="font-mono text-slate-500">
                   {fmtPence(platformFee)}
                 </dd>
@@ -429,9 +484,9 @@ export default async function ClubCyclePage({ params }: CyclePageProps) {
             ) : null}
           </dl>
           {totalPot === 0 && cycle.status === "open" ? (
-            <p className="mt-4 text-xs text-slate-400">
-              The pot grows as members pay their fees. It will be visible here
-              once the cycle closes.
+            <p className="mt-5 text-xs text-slate-400">
+              The pot grows as members pay their fees. The final amount will be
+              shown here once the cycle closes.
             </p>
           ) : null}
         </div>
@@ -461,10 +516,10 @@ export default async function ClubCyclePage({ params }: CyclePageProps) {
               <table className="w-full min-w-[28rem] border-collapse text-left text-sm">
                 <thead>
                   <tr className="border-b border-slate-100">
-                    <th className="pb-3 pr-4 text-xs font-medium uppercase tracking-wide text-slate-500">
+                    <th className="pb-3 pr-4 text-xs font-semibold uppercase tracking-widest text-slate-400">
                       Member
                     </th>
-                    <th className="pb-3 pr-4 text-xs font-medium uppercase tracking-wide text-slate-500">
+                    <th className="pb-3 text-xs font-semibold uppercase tracking-widest text-slate-400">
                       Result
                     </th>
                   </tr>
@@ -477,26 +532,26 @@ export default async function ClubCyclePage({ params }: CyclePageProps) {
                       <tr
                         key={e.id}
                         className={`border-b border-slate-50 last:border-0 ${
-                          isViewerRow ? "bg-blue-50/60" : ""
+                          isViewerRow ? "bg-[#f7f9fc]" : ""
                         }`}
                       >
-                        <td className="py-3 pr-4 font-medium text-slate-900">
+                        <td className="py-3.5 pr-4 font-medium text-[#0c1526]">
                           {m?.display_name ?? (
                             <span className="font-normal text-slate-400">—</span>
                           )}
                           {isViewerRow ? (
-                            <span className="ml-2 text-xs font-normal text-blue-600">
+                            <span className="ml-2 text-xs font-normal text-[#0f2444]">
                               (you)
                             </span>
                           ) : null}
                         </td>
-                        <td className="py-3">
+                        <td className="py-3.5">
                           {cycle.status === "drawn" ||
                           cycle.status === "settled" ? (
                             <WinnerBadge isWinner={e.is_winner} />
                           ) : (
                             <span className="text-xs text-slate-400">
-                              Draw pending
+                              Pending
                             </span>
                           )}
                         </td>
@@ -515,22 +570,21 @@ export default async function ClubCyclePage({ params }: CyclePageProps) {
         <Card id="settlements">
           <CardHeader
             title="Pot settlement"
-            description="How the pot is split after the draw: winner, club, and platform."
+            description="How the pot is distributed after the draw: winner, club, and Coffers."
           />
           <div className="px-6 py-5">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[28rem] border-collapse text-left text-sm">
                 <thead>
                   <tr className="border-b border-slate-100">
-                    <th className="pb-3 pr-4 text-xs font-medium uppercase tracking-wide text-slate-500">
-                      Recipient
-                    </th>
-                    <th className="pb-3 pr-4 text-xs font-medium uppercase tracking-wide text-slate-500">
-                      Amount
-                    </th>
-                    <th className="pb-3 text-xs font-medium uppercase tracking-wide text-slate-500">
-                      Status
-                    </th>
+                    {["Recipient", "Amount", "Status"].map((h) => (
+                      <th
+                        key={h}
+                        className="pb-3 pr-4 text-xs font-semibold uppercase tracking-widest text-slate-400"
+                      >
+                        {h}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
@@ -539,13 +593,13 @@ export default async function ClubCyclePage({ params }: CyclePageProps) {
                       key={s.id}
                       className="border-b border-slate-50 last:border-0"
                     >
-                      <td className="py-3 pr-4 font-medium text-slate-900 capitalize">
-                        {s.recipient_type}
+                      <td className="py-3.5 pr-4 font-medium text-[#0c1526] capitalize">
+                        {s.recipient_type === "platform" ? "Coffers" : s.recipient_type}
                       </td>
-                      <td className="py-3 pr-4 font-mono text-sm text-slate-700">
+                      <td className="py-3.5 pr-4 font-mono font-semibold text-[#0c1526]">
                         {fmtPence(Number(s.amount_pence ?? 0))}
                       </td>
-                      <td className="py-3">
+                      <td className="py-3.5">
                         <SettlementStatusBadge status={s.status} />
                       </td>
                     </tr>

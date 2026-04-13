@@ -20,29 +20,33 @@ export default async function JoinPage({ params }: JoinPageProps) {
 
   if (clubError || !club) {
     return (
-      <main className="mx-auto flex max-w-md flex-col gap-6 py-12">
-        <div className="flex flex-col gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-2xl dark:bg-red-900/30">
-            ✕
+      <div className="min-h-screen bg-[#f7f9fc]">
+        <div className="mx-auto max-w-md px-4 py-20 sm:px-6">
+          <div className="rounded-2xl border border-slate-200 bg-white p-10 shadow-sm">
+            <div className="mb-6 flex h-10 w-10 items-center justify-center rounded-full border border-red-100 bg-red-50 text-red-500">
+              <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <h1 className="text-xl font-bold text-[#0c1526]">
+              Invalid invite link
+            </h1>
+            <p className="mt-2 text-sm leading-relaxed text-slate-500">
+              This link doesn&apos;t match any club. It may have expired or been
+              copied incorrectly.
+            </p>
+            <p className="mt-2 text-sm text-slate-500">
+              Ask your club owner to share the link again from their club page.
+            </p>
+            <Link
+              href="/dashboard"
+              className="mt-6 inline-flex text-sm font-medium text-[#0f2444] underline underline-offset-2"
+            >
+              ← Go to your clubs
+            </Link>
           </div>
-          <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">
-            Invalid invite link
-          </h1>
-          <p className="text-sm text-neutral-600 dark:text-neutral-400">
-            This link doesn&apos;t match any club. It may have been reset or
-            copied incorrectly.
-          </p>
-          <p className="text-sm text-neutral-600 dark:text-neutral-400">
-            Ask your club owner to share the link again from their club page.
-          </p>
         </div>
-        <Link
-          href="/dashboard"
-          className="w-fit text-sm font-medium text-neutral-700 underline underline-offset-2 dark:text-neutral-300"
-        >
-          ← Go to your clubs
-        </Link>
-      </main>
+      </div>
     );
   }
 
@@ -62,38 +66,35 @@ export default async function JoinPage({ params }: JoinPageProps) {
     .eq("user_id", user.id)
     .maybeSingle();
 
-  const alreadyMember = Boolean(membership);
+  const alreadyMember    = Boolean(membership);
   const membershipStatus = membership?.status ?? null;
 
   return (
-    <main className="mx-auto flex max-w-md flex-col gap-8 py-12">
-      {/* Club identity */}
-      <div className="flex flex-col gap-1">
-        <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-          You&apos;ve been invited to
-        </p>
-        <h1 className="text-2xl font-semibold tracking-tight text-neutral-900 dark:text-neutral-100">
+    <div className="min-h-screen bg-[#f7f9fc]">
+      <div className="mx-auto max-w-md px-4 py-20 sm:px-6">
+        <div className="mb-2 text-xs font-semibold uppercase tracking-widest text-slate-400">
+          Invitation
+        </div>
+        <h1 className="mb-8 text-3xl font-bold tracking-tight text-[#0c1526]">
           {club.name}
         </h1>
+        <JoinClubPanel
+          clubId={club.id}
+          clubName={club.name}
+          inviteToken={token}
+          alreadyMember={alreadyMember}
+          membershipStatus={membershipStatus}
+        />
+        <p className="mt-8 text-xs text-slate-400">
+          Wrong club?{" "}
+          <Link
+            href="/dashboard"
+            className="font-medium text-slate-600 underline underline-offset-2"
+          >
+            Go to your clubs
+          </Link>
+        </p>
       </div>
-
-      <JoinClubPanel
-        clubId={club.id}
-        clubName={club.name}
-        inviteToken={token}
-        alreadyMember={alreadyMember}
-        membershipStatus={membershipStatus}
-      />
-
-      <p className="text-xs text-neutral-400 dark:text-neutral-500">
-        Wrong link or club?{" "}
-        <Link
-          href="/dashboard"
-          className="font-medium text-neutral-600 underline underline-offset-2 dark:text-neutral-300"
-        >
-          Go to your clubs
-        </Link>
-      </p>
-    </main>
+    </div>
   );
 }

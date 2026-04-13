@@ -32,195 +32,182 @@ export default async function HomePage() {
   const year = new Date().getFullYear();
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* ── Nav ── */}
-      <header className="sticky top-0 z-50 border-b border-slate-100 bg-white/95 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <span className="text-lg font-semibold tracking-tight text-slate-900">
-            Coffers
-          </span>
-          <nav className="flex items-center gap-2">
-            <Link
-              href="/sign-in"
-              className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
-            >
-              Sign in
-            </Link>
-            <Link
-              href="/sign-up"
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800"
-            >
-              Get started
-            </Link>
-          </nav>
-        </div>
-      </header>
+    <div className="min-h-screen">
 
-      {/* ── Hero ── */}
-      <section className="mx-auto max-w-4xl px-6 pb-20 pt-24 text-center">
-        <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-1.5 text-xs font-medium text-slate-600">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
-          Simple. Fair. Transparent.
-        </div>
-        <h1 className="text-5xl font-bold leading-tight tracking-tight text-slate-900 sm:text-6xl">
-          Your savings club,
-          <br />
-          <span className="text-slate-400">finally organised.</span>
-        </h1>
-        <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-slate-600">
-          Collect monthly fees, run a fair draw, and split the pot — no
-          spreadsheets, no disputes, no confusion.
-        </p>
-        <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <Link
-            href="/sign-up"
-            className="w-full rounded-xl bg-slate-900 px-8 py-3.5 text-base font-semibold text-white transition-colors hover:bg-slate-800 sm:w-auto"
-          >
-            Create your club
-          </Link>
-          <Link
-            href="/sign-in"
-            className="w-full rounded-xl border border-slate-200 px-8 py-3.5 text-base font-semibold text-slate-700 transition-colors hover:bg-slate-50 sm:w-auto"
-          >
-            Sign in
-          </Link>
-        </div>
-        <p className="mt-5 text-sm text-slate-500">
-          Have an invite link?{" "}
-          <Link
-            href="/sign-in"
-            className="font-medium text-slate-700 underline underline-offset-2"
-          >
-            Sign in to join your club
-          </Link>
-        </p>
-      </section>
+      {/* ═══════════════════════════════════════════════════════════════════
+          DARK HERO BLOCK — nav + hero share the same navy background
+          ═══════════════════════════════════════════════════════════════ */}
+      <div className="bg-[#091929]">
 
-      {/* ── How it works ── */}
-      <section className="border-y border-slate-100 bg-slate-50 py-24">
-        <div className="mx-auto max-w-5xl px-6">
-          <div className="mb-16 text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-slate-900">
+        {/* ── Nav (dark) ────────────────────────────────────────────────── */}
+        <header className="sticky top-0 z-50 bg-[#091929]/95 backdrop-blur-md border-b border-white/8">
+          <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+            <span className="text-lg font-semibold tracking-tight text-white">
+              Coffers
+            </span>
+            <nav className="flex items-center gap-1">
+              <Link
+                href="/sign-in"
+                className="px-4 py-2 text-sm font-medium text-blue-200/70 transition-colors hover:text-white"
+              >
+                Sign in
+              </Link>
+              <Link
+                href="/sign-up"
+                className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-[#0f2444] transition-colors hover:bg-blue-50"
+              >
+                Start your club
+              </Link>
+            </nav>
+          </div>
+        </header>
+
+        {/* ── Hero ────────────────────────────────────────────────────────── */}
+        <section className="mx-auto max-w-6xl px-6 pb-28 pt-16 sm:pt-24">
+          <div className="max-w-[42rem]">
+            {/* Headline */}
+            <h1 className="text-[clamp(3rem,8vw,5.75rem)] font-bold leading-[1.03] tracking-tight">
+              <span className="text-white">Club Coffers</span>
+              <span className="text-[#be3535]">.</span>
+              <br />
+              <span className="text-[#6a9abf]">Done right.</span>
+            </h1>
+
+            {/* Red accent bar — visual beat between headline and copy */}
+            <div className="mt-7 h-[3px] w-12 rounded-full bg-[#be3535]" />
+
+            {/* Supporting copy */}
+            <p className="mt-6 max-w-md text-lg leading-relaxed text-blue-100/75">
+              Members contribute monthly. You run the draw. The club gets
+              funded — automatically.
+            </p>
+
+            {/* CTAs */}
+            <div className="mt-9 flex flex-wrap gap-3">
+              <Link
+                href="/sign-up"
+                className="rounded-xl bg-white px-7 py-3.5 text-base font-semibold text-[#0f2444] transition-colors hover:bg-blue-50"
+              >
+                Start your club
+              </Link>
+              <Link
+                href="/sign-in"
+                className="rounded-xl border border-white/15 px-7 py-3.5 text-base font-semibold text-white/75 transition-colors hover:border-white/30 hover:text-white"
+              >
+                Sign in
+              </Link>
+            </div>
+          </div>
+        </section>
+
+      </div>{/* end dark hero block */}
+
+      {/* ── How it works — white ─────────────────────────────────────────── */}
+      <section className="bg-white py-24">
+        <div className="mx-auto max-w-6xl px-6">
+          <div className="mb-14">
+            <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
               How it works
-            </h2>
-            <p className="mt-3 text-base text-slate-500">
-              From first invite to draw day in three steps.
             </p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#0c1526]">
+              From first invite to draw day.
+            </h2>
           </div>
-          <div className="grid gap-6 sm:grid-cols-3">
-            <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-              <div className="mb-6 flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-sm font-bold text-white">
-                1
+          <div className="grid gap-12 sm:grid-cols-3">
+            {[
+              {
+                n: "01",
+                title: "Set up your club",
+                body: "Create an account, set a monthly fee, and share your invite link. Approve members as they join — you decide who&apos;s in.",
+              },
+              {
+                n: "02",
+                title: "Collect fees each month",
+                body: "Open a draw cycle, mark who has paid, and watch the pot grow. Only active, paid members who joined before the cycle are eligible.",
+              },
+              {
+                n: "03",
+                title: "Run the draw",
+                body: "Close the cycle and pick a winner at random from all eligible entries. The result is instant, recorded, and final.",
+              },
+            ].map((step) => (
+              <div key={step.n} className="flex flex-col gap-5">
+                <p className="text-5xl font-bold text-[#dce8f5]">{step.n}</p>
+                <div>
+                  <h3 className="text-lg font-semibold text-[#0c1526]">
+                    {step.title}
+                  </h3>
+                  <p
+                    className="mt-2 text-sm leading-relaxed text-slate-500"
+                    dangerouslySetInnerHTML={{ __html: step.body }}
+                  />
+                </div>
               </div>
-              <h3 className="mb-2 text-base font-semibold text-slate-900">
-                Set up your club
-              </h3>
-              <p className="text-sm leading-relaxed text-slate-500">
-                Create an account, name your club, and set a monthly fee. Share
-                the invite link — members request to join and you approve them.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-              <div className="mb-6 flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-sm font-bold text-white">
-                2
-              </div>
-              <h3 className="mb-2 text-base font-semibold text-slate-900">
-                Collect fees each cycle
-              </h3>
-              <p className="text-sm leading-relaxed text-slate-500">
-                Open a draw cycle, mark who has paid, and watch the pot grow.
-                Only active, paid members who joined before the period are
-                eligible.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-              <div className="mb-6 flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-sm font-bold text-white">
-                3
-              </div>
-              <h3 className="mb-2 text-base font-semibold text-slate-900">
-                Run the draw
-              </h3>
-              <p className="text-sm leading-relaxed text-slate-500">
-                Close the cycle and run a random draw. The winner and the club
-                each receive their share, with a full audit trail for everyone
-                to see.
-              </p>
-            </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* ── Trust ── */}
-      <section className="py-24">
-        <div className="mx-auto max-w-5xl px-6">
-          <div className="mb-16 text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-slate-900">
-              Built for trust
-            </h2>
-            <p className="mt-3 text-base text-slate-500">
-              Every decision is recorded. Nothing is hidden.
+      {/* ── Trust — soft blue-grey ────────────────────────────────────────── */}
+      <section className="bg-[#edf2f8] py-24">
+        <div className="mx-auto max-w-6xl px-6">
+          <div className="mb-14">
+            <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+              Why Coffers
             </p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#0c1526]">
+              Fair by design.
+            </h2>
           </div>
           <div className="grid gap-10 sm:grid-cols-3">
-            <div>
-              <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-base">
-                🔒
+            {[
+              {
+                title: "Full audit trail",
+                body: "Every payment, approval, and draw result is logged and visible to the whole club. Nothing happens off the record.",
+              },
+              {
+                title: "Verifiably random draw",
+                body: "The draw picks one winner at random from eligible, paid members only. No manual selection, no override.",
+              },
+              {
+                title: "No spreadsheets",
+                body: "Member approvals, payment tracking, and cycle history live in one place. Always accurate, always accessible.",
+              },
+            ].map((item) => (
+              <div key={item.title} className="flex flex-col gap-4">
+                {/* Red bar accent on trust items */}
+                <div className="h-[3px] w-8 rounded-full bg-[#be3535]" />
+                <h3 className="text-base font-semibold text-[#0c1526]">
+                  {item.title}
+                </h3>
+                <p className="text-sm leading-relaxed text-slate-600">
+                  {item.body}
+                </p>
               </div>
-              <h3 className="mb-1.5 font-semibold text-slate-900">
-                Full audit trail
-              </h3>
-              <p className="text-sm leading-relaxed text-slate-500">
-                Every payment, approval, and draw result is logged and visible
-                to the club. Nothing happens in the dark.
-              </p>
-            </div>
-            <div>
-              <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-base">
-                🎲
-              </div>
-              <h3 className="mb-1.5 font-semibold text-slate-900">
-                Fair random draw
-              </h3>
-              <p className="text-sm leading-relaxed text-slate-500">
-                The draw picks one winner at random from eligible, paid members
-                only. No manipulation, no favouritism.
-              </p>
-            </div>
-            <div>
-              <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-base">
-                📊
-              </div>
-              <h3 className="mb-1.5 font-semibold text-slate-900">
-                No spreadsheets
-              </h3>
-              <p className="text-sm leading-relaxed text-slate-500">
-                Member approvals, payment tracking, and cycle history live in
-                one place. Always accurate, always up to date.
-              </p>
-            </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* ── CTA banner ── */}
-      <section className="bg-slate-900 py-20">
-        <div className="mx-auto max-w-3xl px-6 text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-white">
-            Ready to organise your club?
+      {/* ── CTA — deep navy ──────────────────────────────────────────────── */}
+      <section className="bg-[#0f2444]">
+        <div className="mx-auto max-w-4xl px-6 py-24 text-center">
+          <h2 className="text-4xl font-bold tracking-tight text-white">
+            Ready to run your club properly?
           </h2>
-          <p className="mt-4 text-base text-slate-400">
-            Set up in minutes. No card required.
+          <p className="mt-5 text-base text-blue-200/60">
+            No card required. Set up in minutes.
           </p>
-          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <div className="mt-10 flex flex-wrap justify-center gap-3">
             <Link
               href="/sign-up"
-              className="w-full rounded-xl bg-white px-8 py-3.5 text-base font-semibold text-slate-900 transition-colors hover:bg-slate-100 sm:w-auto"
+              className="rounded-xl bg-white px-7 py-3.5 text-base font-semibold text-[#0f2444] transition-colors hover:bg-blue-50"
             >
-              Create your club
+              Start your club
             </Link>
             <Link
               href="/sign-in"
-              className="w-full rounded-xl border border-slate-700 px-8 py-3.5 text-base font-semibold text-slate-300 transition-colors hover:border-slate-600 hover:text-white sm:w-auto"
+              className="rounded-xl border border-white/15 px-7 py-3.5 text-base font-semibold text-white/75 transition-colors hover:border-white/30 hover:text-white"
             >
               Sign in
             </Link>
@@ -228,27 +215,26 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* ── Footer ── */}
-      <footer className="border-t border-slate-100 py-10">
-        <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-4 px-6 sm:flex-row">
-          <span className="text-sm font-semibold text-slate-900">Coffers</span>
-          <div className="flex items-center gap-6 text-sm text-slate-500">
-            <Link
-              href="/sign-up"
-              className="transition-colors hover:text-slate-900"
-            >
-              Sign up
-            </Link>
-            <Link
-              href="/sign-in"
-              className="transition-colors hover:text-slate-900"
-            >
-              Sign in
-            </Link>
+      {/* ── Footer — white ───────────────────────────────────────────────── */}
+      <footer className="border-t border-slate-100 bg-white">
+        <div className="mx-auto max-w-6xl px-6 py-8">
+          <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
+            <span className="text-sm font-semibold text-[#0c1526]">
+              Coffers
+            </span>
+            <div className="flex items-center gap-6 text-sm text-slate-500">
+              <Link href="/sign-up" className="transition-colors hover:text-slate-900">
+                Sign up
+              </Link>
+              <Link href="/sign-in" className="transition-colors hover:text-slate-900">
+                Sign in
+              </Link>
+            </div>
+            <p className="text-sm text-slate-400">© {year} Coffers</p>
           </div>
-          <p className="text-sm text-slate-400">© {year} Coffers</p>
         </div>
       </footer>
+
     </div>
   );
 }

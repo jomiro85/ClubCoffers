@@ -1,40 +1,62 @@
 @import "tailwindcss";
 
+/* ── Design tokens ───────────────────────────────────────────────────────── */
+
 :root {
+  /* Surfaces */
   --background: #ffffff;
-  --foreground: #0d1117;
+  --surface-1: #f7f9fc;   /* page background — cool near-white */
+  --surface-2: #eef1f8;   /* subtle alt surface */
 
-  /* Design system tokens */
-  --surface: #ffffff;
-  --surface-subtle: #f7f8fb;
-  --border: #e5e8ee;
-  --border-strong: #ccd1dc;
+  /* Typography */
+  --text-primary: #0c1526;   /* near-black with a blue undertone */
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
 
-  /* Navy accent */
-  --navy: #1e3a5f;
-  --navy-hover: #163152;
+  /* Navy — primary accent, CTAs, key emphasis */
+  --navy: #0f2444;
+  --navy-dark: #091929;   /* deeper hero background */
+  --navy-hover: #0a1834;
+  --navy-light: #e8eef7;  /* very light navy for tinted backgrounds */
+  --navy-mid: #1a3558;    /* mid-navy for borders / dividers on dark bg */
+
+  /* Soft blue-grey section background */
+  --section-alt: #edf2f8;
+
+  /* Borders */
+  --border-subtle: #e2e8f0;
+  --border-medium: #c8d4e4;
+
+  /* Danger / muted red — used very sparingly */
+  --red-accent: #be3535;
 }
 
 @theme inline {
   --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-navy: var(--navy);
+  --color-navy-dark: var(--navy-dark);
+  --color-navy-hover: var(--navy-hover);
+  --color-navy-light: var(--navy-light);
+  --color-navy-mid: var(--navy-mid);
+  --color-section-alt: var(--section-alt);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-medium: var(--border-medium);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-red-accent: var(--red-accent);
+
   --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #f0f0f0;
-    --surface: #111111;
-    --surface-subtle: #1a1a1a;
-    --border: #2a2a2a;
-  }
-}
+/* ── Base ────────────────────────────────────────────────────────────────── */
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--surface-1);
+  color: var(--text-primary);
   font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

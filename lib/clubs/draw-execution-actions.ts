@@ -115,9 +115,7 @@ export async function closeDrawCycle(
 
   const { data: cycle, error: cycleErr } = await supabase
     .from("draw_cycles")
-    .select(
-      "id, club_id, status, period_start, cycle_number, name"
-    )
+    .select("id, club_id, status, period_start, cycle_number, name")
     .eq("id", drawCycleId)
     .maybeSingle();
 
@@ -136,8 +134,7 @@ export async function closeDrawCycle(
 
   if (existingEntries && existingEntries.length > 0) {
     return {
-      error:
-        "This cycle already has draw entries. It may already be closed.",
+      error: "This cycle already has draw entries. It may already be closed.",
       success: null,
     };
   }
@@ -200,8 +197,7 @@ export async function closeDrawCycle(
       .delete()
       .eq("draw_cycle_id", drawCycleId);
     return {
-      error:
-        "Could not close this cycle (it may have been closed already).",
+      error: "Could not close this cycle (it may have been closed already).",
       success: null,
     };
   }
@@ -222,8 +218,11 @@ export async function closeDrawCycle(
 
   revalidatePath(`/club/${clubId}`);
   revalidatePath(`/club/${clubId}/cycles/${drawCycleId}`);
+
+  const entryWord = eligible.length === 1 ? "entry" : "entries";
+  const potStr = (totalPotPence / 100).toFixed(2);
   return ok(
-    `Cycle “${cycle.name}” closed with ${eligible.length} eligible entries and ${totalPotPence} pence in the pot.`
+    `"${cycle.name}" closed - ${eligible.length} ${entryWord} in the draw, pot: GBP ${potStr}.`
   );
 }
 
@@ -280,9 +279,7 @@ export async function runDrawCycle(
 
   const { data: cycle, error: cycleErr } = await supabase
     .from("draw_cycles")
-    .select(
-      "id, club_id, status, total_pot_pence, cycle_number, name"
-    )
+    .select("id, club_id, status, total_pot_pence, cycle_number, name")
     .eq("id", drawCycleId)
     .maybeSingle();
 
@@ -347,10 +344,7 @@ export async function runDrawCycle(
 
   const { error: winErr } = await supabase
     .from("draw_entries")
-    .update({
-      is_winner: true,
-      winner_rank: 1,
-    })
+    .update({ is_winner: true, winner_rank: 1 })
     .eq("id", winningEntry.id);
 
   if (winErr) {
@@ -375,7 +369,7 @@ export async function runDrawCycle(
       amount_pence: Number(alloc.club),
       currency: "GBP",
       status: "pending",
-      notes: `Draw cycle ${cycle.cycle_number} — club share (57%)`,
+      notes: `Cycle ${cycle.cycle_number} - club share (57%)`,
     },
     {
       club_id: clubId,
@@ -385,7 +379,7 @@ export async function runDrawCycle(
       amount_pence: Number(alloc.winner),
       currency: "GBP",
       status: "pending",
-      notes: `Draw cycle ${cycle.cycle_number} — winner share (35%)`,
+      notes: `Cycle ${cycle.cycle_number} - winner share (35%)`,
     },
     {
       club_id: clubId,
@@ -394,17 +388,14 @@ export async function runDrawCycle(
       amount_pence: Number(alloc.platform),
       currency: "GBP",
       status: "pending",
-      notes: `Draw cycle ${cycle.cycle_number} — platform fee (8%)`,
+      notes: `Cycle ${cycle.cycle_number} - platform fee (8%)`,
     },
   ]);
 
   if (setErr) {
     await supabase
       .from("draw_entries")
-      .update({
-        is_winner: false,
-        winner_rank: null,
-      })
+      .update({ is_winner: false, winner_rank: null })
       .eq("id", winningEntry.id);
     return { error: setErr.message, success: null };
   }
@@ -429,10 +420,7 @@ export async function runDrawCycle(
       .eq("status", "pending");
     await supabase
       .from("draw_entries")
-      .update({
-        is_winner: false,
-        winner_rank: null,
-      })
+      .update({ is_winner: false, winner_rank: null })
       .eq("id", winningEntry.id);
     return { error: cycleUpdErr.message, success: null };
   }
@@ -444,14 +432,10 @@ export async function runDrawCycle(
       .eq("status", "pending");
     await supabase
       .from("draw_entries")
-      .update({
-        is_winner: false,
-        winner_rank: null,
-      })
+      .update({ is_winner: false, winner_rank: null })
       .eq("id", winningEntry.id);
     return {
-      error:
-        "Could not complete the draw (cycle may have changed). Try again.",
+      error: "Could not complete the draw (cycle may have changed). Try again.",
       success: null,
     };
   }
@@ -468,10 +452,7 @@ export async function runDrawCycle(
     action: "draw_cycle.draw_run",
     entityType: "draw_cycle",
     entityId: drawCycleId,
-    metadata: {
-      ...baseMeta,
-      entry_count: entryList.length,
-    },
+    metadata: { ...baseMeta, entry_count: entryList.length },
   });
 
   await insertDrawAuditEvent(supabase, user.id, {
@@ -504,7 +485,9 @@ export async function runDrawCycle(
 
   revalidatePath(`/club/${clubId}`);
   revalidatePath(`/club/${clubId}/cycles/${drawCycleId}`);
+
+  const potStr = (totalPot / 100).toFixed(2);
   return ok(
-    `Draw completed for “${cycle.name}”. Winner: ${winnerDisplayName ?? winnerMembershipId}. Settlements recorded.`
+    `Draw complete for "${cycle.name}" - winner: ${winnerDisplayName ?? "unknown"}, pot: GBP ${potStr}.`
   );
 }
